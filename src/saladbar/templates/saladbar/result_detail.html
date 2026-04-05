@@ -1,0 +1,139 @@
+{% extends saladbar_base_template %}
+{% load static %}
+
+{% block title %}Task Result — Salad Bar{% endblock title %}
+
+{% block css %}
+<style>
+    .card {
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        border: 1px solid #e2e8f0;
+    }
+    .card-header {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border-bottom: 2px solid #e2e8f0;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    .result-block {
+        background: #1e293b;
+        color: #e2e8f0;
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: monospace;
+        font-size: 0.8rem;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    .traceback-block {
+        background: #fef2f2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: monospace;
+        font-size: 0.8rem;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 500px;
+        overflow-y: auto;
+    }
+</style>
+{% endblock css %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-start my-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="{% url 'saladbar:dashboard' %}">Salad Bar</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'saladbar:result-list' %}">Task Logs</a></li>
+                    <li class="breadcrumb-item active">{{ result.task_id|truncatechars:16 }}</li>
+                </ol>
+            </nav>
+            <h1 class="fw-bold" style="font-size: 1.5rem;">{{ result.task_name }}</h1>
+            <span class="badge {% if result.status == 'SUCCESS' %}bg-success{% elif result.status == 'FAILURE' %}bg-danger{% elif result.status == 'STARTED' %}bg-warning text-dark{% else %}bg-secondary{% endif %}" style="font-size: 0.85rem;">
+                {{ result.status|lower }}
+            </span>
+        </div>
+        <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+            <i class="fa-solid fa-arrow-left me-1"></i> Back
+        </a>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- Metadata -->
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-circle-info" style="color: #3b82f6;"></i> Metadata
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4" style="font-size: 0.85rem;">Task ID</dt>
+                        <dd class="col-sm-8" style="font-size: 0.8rem; font-family: monospace; word-break: break-all;">{{ result.task_id }}</dd>
+                        <dt class="col-sm-4" style="font-size: 0.85rem;">Worker</dt>
+                        <dd class="col-sm-8" style="font-size: 0.85rem;">{{ result.worker|default:"—" }}</dd>
+                        <dt class="col-sm-4" style="font-size: 0.85rem;">Created</dt>
+                        <dd class="col-sm-8" style="font-size: 0.85rem;">{{ result.date_created|default:"—" }}</dd>
+                        <dt class="col-sm-4" style="font-size: 0.85rem;">Completed</dt>
+                        <dd class="col-sm-8" style="font-size: 0.85rem;">{{ result.date_done|default:"—" }}</dd>
+                        {% if duration %}
+                        <dt class="col-sm-4" style="font-size: 0.85rem;">Duration</dt>
+                        <dd class="col-sm-8" style="font-size: 0.85rem;">{{ duration }}</dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+
+            {% if result.task_args or result.task_kwargs %}
+            <div class="card mt-3">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-code" style="color: #8b5cf6;"></i> Arguments
+                </div>
+                <div class="card-body">
+                    {% if result.task_args %}
+                    <div class="mb-2">
+                        <strong style="font-size: 0.8rem; color: #475569;">Args</strong>
+                        <div class="result-block mt-1">{{ result.task_args }}</div>
+                    </div>
+                    {% endif %}
+                    {% if result.task_kwargs %}
+                    <div>
+                        <strong style="font-size: 0.8rem; color: #475569;">Kwargs</strong>
+                        <div class="result-block mt-1">{{ result.task_kwargs }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Result / Traceback -->
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center gap-2">
+                    {% if result.status == "FAILURE" %}
+                    <i class="fa-solid fa-circle-xmark" style="color: #ef4444;"></i> Traceback
+                    {% else %}
+                    <i class="fa-solid fa-circle-check" style="color: #10b981;"></i> Result
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if result.traceback %}
+                    <div class="traceback-block">{{ result.traceback }}</div>
+                    {% elif result_pretty %}
+                    <div class="result-block">{{ result_pretty }}</div>
+                    {% else %}
+                    <p class="text-muted mb-0">No result data.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

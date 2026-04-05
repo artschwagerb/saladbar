@@ -1,0 +1,168 @@
+{% extends saladbar_base_template %}
+{% load static %}
+
+{% block title %}Task Logs — Salad Bar{% endblock title %}
+
+{% block css %}
+<style>
+    .card {
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        border: 1px solid #e2e8f0;
+    }
+    .card-header {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border-bottom: 2px solid #e2e8f0;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    .table-responsive {
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .table thead th {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        color: #475569;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+        padding: 0.875rem 0.75rem;
+        border: none;
+        white-space: nowrap;
+    }
+    .table tbody tr {
+        transition: background-color 0.15s;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .table tbody tr:hover { background-color: #f0f9ff; }
+    .table tbody td {
+        padding: 0.75rem;
+        vertical-align: middle;
+        font-size: 0.875rem;
+        color: #1e293b;
+    }
+    .filter-bar {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        border: 1px solid #e2e8f0;
+    }
+</style>
+{% endblock css %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-start my-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="{% url 'saladbar:dashboard' %}">Salad Bar</a></li>
+                    <li class="breadcrumb-item active">Task Logs</li>
+                </ol>
+            </nav>
+            <h1 class="fw-bold">Task Logs</h1>
+            <p class="text-muted mb-0">Showing last {{ limit }} task executions.
+                {% if limit == 1000 %}
+                <a href="?all=1">Show all (5000)</a>
+                {% endif %}
+            </p>
+        </div>
+        <a href="{% url 'saladbar:dashboard' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
+        </a>
+    </div>
+
+    <!-- Filter -->
+    <div class="filter-bar mb-4">
+        <div class="row g-3 align-items-end">
+            <div class="col-auto">
+                <label class="form-label fw-semibold mb-1" style="font-size: 0.8rem; color: #475569;">Status</label>
+                <select class="form-select form-select-sm" id="filter-status" style="border-radius: 8px; min-width: 140px;">
+                    <option value="all">All</option>
+                    <option value="SUCCESS">Success</option>
+                    <option value="FAILURE">Failure</option>
+                    <option value="STARTED">Started</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label fw-semibold mb-1" style="font-size: 0.8rem; color: #475569;">Search</label>
+                <input type="text" class="form-control form-control-sm" id="filter-search" placeholder="Filter by task name..." style="border-radius: 8px; min-width: 240px;">
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="log-table">
+                    <thead>
+                        <tr>
+                            <th>Task</th>
+                            <th>Status</th>
+                            <th>Started</th>
+                            <th>Completed</th>
+                            <th>Worker</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in results %}
+                        <tr data-status="{{ r.status }}" data-name="{{ r.task_name|lower }}">
+                            <td>
+                                <span style="font-weight: 600; font-size: 0.85rem;">{{ r.task_name|truncatechars:60 }}</span>
+                                <div style="font-size: 0.75rem; color: #94a3b8; font-family: monospace;">{{ r.task_id|truncatechars:16 }}</div>
+                            </td>
+                            <td>
+                                {% if r.status == "SUCCESS" %}
+                                <span class="badge bg-success">success</span>
+                                {% elif r.status == "FAILURE" %}
+                                <span class="badge bg-danger">failure</span>
+                                {% elif r.status == "STARTED" %}
+                                <span class="badge bg-warning text-dark">started</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ r.status|lower }}</span>
+                                {% endif %}
+                            </td>
+                            <td style="font-size: 0.8rem; color: #64748b; white-space: nowrap;">{{ r.date_created|default:"—" }}</td>
+                            <td style="font-size: 0.8rem; color: #64748b; white-space: nowrap;">{{ r.date_done|default:"—" }}</td>
+                            <td style="font-size: 0.8rem; color: #64748b;">{{ r.worker|default:"—" }}</td>
+                            <td>
+                                <a href="{% url 'saladbar:result-detail' r.pk %}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.75rem;">
+                                    <i class="fa-solid fa-eye me-1"></i>Detail
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted py-4">No task results.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block script-footer %}
+<script>
+    const filterStatus = document.getElementById('filter-status');
+    const filterSearch = document.getElementById('filter-search');
+    const rows = document.querySelectorAll('#log-table tbody tr[data-status]');
+
+    function applyFilters() {
+        const status = filterStatus.value;
+        const search = filterSearch.value.toLowerCase();
+        rows.forEach(row => {
+            const rowStatus = row.dataset.status;
+            const name = row.dataset.name;
+            let show = true;
+            if (status !== 'all' && rowStatus !== status) show = false;
+            if (search && !name.includes(search)) show = false;
+            row.style.display = show ? '' : 'none';
+        });
+    }
+    filterStatus.addEventListener('change', applyFilters);
+    filterSearch.addEventListener('input', applyFilters);
+</script>
+{% endblock script-footer %}

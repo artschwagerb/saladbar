@@ -1,0 +1,4 @@
+include LICENSE
+include README.md
+recursive-include src/saladbar/templates *
+recursive-include src/saladbar/static *

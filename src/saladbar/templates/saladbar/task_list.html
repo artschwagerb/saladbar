@@ -1,0 +1,227 @@
+{% extends saladbar_base_template %}
+{% load static %}
+
+{% block title %}Salad Bar — Periodic Tasks{% endblock title %}
+
+{% block css %}
+<style>
+    .card {
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        border: 1px solid #e2e8f0;
+    }
+    .card-header {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border-bottom: 2px solid #e2e8f0;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    .table-responsive {
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .table thead th {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        color: #475569;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+        padding: 0.875rem 0.75rem;
+        border: none;
+        white-space: nowrap;
+    }
+    .table tbody tr {
+        transition: background-color 0.15s;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .table tbody tr:hover { background-color: #f0f9ff; }
+    .table tbody td {
+        padding: 0.75rem;
+        vertical-align: middle;
+        font-size: 0.875rem;
+        color: #1e293b;
+    }
+    .task-name {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #1e293b;
+    }
+    .task-path {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        font-family: monospace;
+    }
+    .run-bar {
+        display: flex;
+        gap: 2px;
+        margin-top: 0.25rem;
+    }
+    .run-segment {
+        height: 5px;
+        flex: 1;
+        border-radius: 3px;
+        min-width: 12px;
+    }
+    .run-segment.SUCCESS { background: #10b981; }
+    .run-segment.FAILURE { background: #ef4444; }
+    .run-segment.STARTED { background: #f59e0b; }
+    .run-segment.PENDING { background: #94a3b8; }
+    .schedule-label {
+        font-size: 0.8rem;
+        color: #64748b;
+    }
+    .filter-bar {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        border: 1px solid #e2e8f0;
+    }
+</style>
+{% endblock css %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-start my-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="{% url 'saladbar:dashboard' %}">Salad Bar</a></li>
+                    <li class="breadcrumb-item active">Periodic Tasks</li>
+                </ol>
+            </nav>
+            <h1 class="fw-bold">Periodic Tasks</h1>
+            <p class="text-muted mb-0">All scheduled Celery Beat tasks.</p>
+        </div>
+        <div>
+            <a href="{% url 'saladbar:dashboard' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="filter-bar mb-4">
+        <div class="row g-3 align-items-end">
+            <div class="col-auto">
+                <label class="form-label fw-semibold mb-1" style="font-size: 0.8rem; color: #475569;">Status</label>
+                <select class="form-select form-select-sm" id="filter-status" style="border-radius: 8px; min-width: 140px;">
+                    <option value="all">All</option>
+                    <option value="enabled">Enabled</option>
+                    <option value="disabled">Disabled</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label fw-semibold mb-1" style="font-size: 0.8rem; color: #475569;">Search</label>
+                <input type="text" class="form-control form-control-sm" id="filter-search" placeholder="Filter by name..." style="border-radius: 8px; min-width: 240px;">
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="task-table">
+                    <thead>
+                        <tr>
+                            <th>Task</th>
+                            <th>Schedule</th>
+                            <th>Status</th>
+                            <th>Last Run</th>
+                            <th>Run History</th>
+                            <th class="text-end">Total Runs</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for task in tasks %}
+                        <tr data-enabled="{{ task.enabled }}" data-name="{{ task.name|lower }}">
+                            <td>
+                                <a href="{% url 'saladbar:task-detail' task.pk %}" class="text-decoration-none">
+                                    <div class="task-name {% if not task.enabled %}text-muted text-decoration-line-through{% endif %}">{{ task.name }}</div>
+                                </a>
+                                <div class="task-path">{{ task.task }}</div>
+                            </td>
+                            <td>
+                                <div class="schedule-label">
+                                    <i class="fa-regular fa-clock me-1"></i>
+                                    {% if task.crontab %}{{ task.crontab }}{% elif task.interval %}{{ task.interval }}{% else %}—{% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if task.enabled %}
+                                <span class="badge bg-success">enabled</span>
+                                {% else %}
+                                <span class="badge bg-secondary">disabled</span>
+                                {% endif %}
+                            </td>
+                            <td style="white-space: nowrap; font-size: 0.8rem; color: #64748b;">
+                                {% if task.latest_result %}
+                                    {% if task.latest_result.status == "SUCCESS" %}
+                                    <i class="fa-solid fa-check text-success me-1"></i>
+                                    {% elif task.latest_result.status == "FAILURE" %}
+                                    <i class="fa-solid fa-xmark text-danger me-1"></i>
+                                    {% elif task.latest_result.status == "STARTED" %}
+                                    <i class="fa-solid fa-spinner fa-spin text-warning me-1"></i>
+                                    {% endif %}
+                                    {{ task.latest_result.date_done|timesince }} ago
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td style="min-width: 100px;">
+                                {% if task.run_history %}
+                                <div class="run-bar">
+                                    {% for status in task.run_history reversed %}
+                                    <div class="run-segment {{ status }}" title="{{ status }}"></div>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <span class="text-muted" style="font-size: 0.8rem;">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{{ task.total_run_count }}</td>
+                            <td>
+                                <form method="post" action="{% url 'saladbar:task-run' task.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{% url 'saladbar:task-list' %}">
+                                    <button type="submit" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size: 0.75rem;" title="Run now">
+                                        <i class="fa-solid fa-play"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-4">No periodic tasks configured.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block script-footer %}
+<script>
+    const filterStatus = document.getElementById('filter-status');
+    const filterSearch = document.getElementById('filter-search');
+    const rows = document.querySelectorAll('#task-table tbody tr[data-enabled]');
+
+    function applyFilters() {
+        const status = filterStatus.value;
+        const search = filterSearch.value.toLowerCase();
+        rows.forEach(row => {
+            const enabled = row.dataset.enabled === 'True';
+            const name = row.dataset.name;
+            let show = true;
+            if (status === 'enabled' && !enabled) show = false;
+            if (status === 'disabled' && enabled) show = false;
+            if (search && !name.includes(search)) show = false;
+            row.style.display = show ? '' : 'none';
+        });
+    }
+    filterStatus.addEventListener('change', applyFilters);
+    filterSearch.addEventListener('input', applyFilters);
+</script>
+{% endblock script-footer %}
