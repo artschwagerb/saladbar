@@ -4,7 +4,7 @@
 
 django-saladbar is a pip-installable Django app (`pip install django-saladbar`) that provides a Celery task monitoring dashboard. It gives visibility into workers, periodic tasks, queue depth, error grouping, and task execution history. It has no models with database tables (permissions-only unmanaged model) and is read-only against `django-celery-beat` and `django-celery-results` tables.
 
-**Origin:** Extracted from the NetID project at StackOverflow. Designed to be reusable across any Django + Celery + Redis project.
+Designed to be reusable across any Django + Celery + Redis project.
 
 ## Development Commands
 
