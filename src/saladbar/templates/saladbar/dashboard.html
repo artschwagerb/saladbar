@@ -126,6 +126,17 @@
             <div class="stat-card" style="border-left: 4px solid #f59e0b;">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
+                        <div class="stat-label">Retries (24h)</div>
+                        <div class="stat-value" style="color: {% if total_retries_24h > 0 %}#f59e0b{% else %}#94a3b8{% endif %};">{{ total_retries_24h }}</div>
+                    </div>
+                    <i class="fa-solid fa-arrows-rotate stat-icon" style="color: #f59e0b;"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="stat-card" style="border-left: 4px solid #f59e0b;">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
                         <div class="stat-label">Avg Runtime</div>
                         <div class="stat-value" style="color: #f59e0b;">{{ avg_runtime_s }}s</div>
                     </div>
