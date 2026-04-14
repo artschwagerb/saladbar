@@ -120,6 +120,61 @@ class ViewPermissionTests(TestCase):
             self.assertLessEqual(len(data["result"]), 200)
 
 
+class DashboardEmptyStateTests(TestCase):
+    """Test that the dashboard renders gracefully with no task data."""
+
+    def setUp(self):
+        self.view_perm, self.manage_perm = _get_or_create_permissions()
+        self.user = User.objects.create_user(username="viewer", password="testpass")
+        self.user.user_permissions.add(self.view_perm)
+
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_dashboard_empty_state_no_chart_js_errors(self, mock_infra):
+        """Dashboard with zero TaskResults should not render chart canvases."""
+        self.client.login(username="viewer", password="testpass")
+        response = self.client.get("/saladbar/")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # Chart canvases should NOT be rendered when there's no data
+        self.assertNotIn('id="hourlyChart"', content)
+        self.assertNotIn('id="dailyChart"', content)
+        self.assertNotIn('id="queueDepthChart"', content)
+
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_dashboard_empty_state_shows_no_data_messages(self, mock_infra):
+        """Dashboard with zero TaskResults should show empty-state placeholders."""
+        self.client.login(username="viewer", password="testpass")
+        response = self.client.get("/saladbar/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No task data in the last 24 hours")
+        self.assertContains(response, "No task data in the last 7 days")
+        self.assertContains(response, "No queue data in the last 24 hours")
+
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_dashboard_empty_state_stats_show_zero(self, mock_infra):
+        """Stat cards should show 0 values, not blank, when there's no data."""
+        self.client.login(username="viewer", password="testpass")
+        response = self.client.get("/saladbar/")
+        self.assertEqual(response.status_code, 200)
+        context = response.context
+        self.assertEqual(context["total_24h"], 0)
+        self.assertEqual(context["success_rate_24h"], 0)
+        self.assertEqual(context["failure_24h"], 0)
+        self.assertEqual(context["avg_runtime_s"], 0)
+        self.assertEqual(context["throughput"], 0.0)
+
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_dashboard_empty_state_context_flags(self, mock_infra):
+        """Context should include has_*_data flags set to False when empty."""
+        self.client.login(username="viewer", password="testpass")
+        response = self.client.get("/saladbar/")
+        self.assertEqual(response.status_code, 200)
+        context = response.context
+        self.assertFalse(context["has_hourly_data"])
+        self.assertFalse(context["has_daily_data"])
+        self.assertFalse(context["has_queue_depth_data"])
+
+
 class TaskListViewTests(TestCase):
     def setUp(self):
         self.view_perm, self.manage_perm = _get_or_create_permissions()

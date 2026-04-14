@@ -213,19 +213,43 @@
         <div class="col-lg-4">
             <div class="card h-100">
                 <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-chart-bar" style="color: #3b82f6;"></i> Task Volume (24h)</div>
-                <div class="card-body"><div class="chart-container-sm"><canvas id="hourlyChart"></canvas></div></div>
+                <div class="card-body">
+                    {% if has_hourly_data %}
+                    <div class="chart-container-sm"><canvas id="hourlyChart"></canvas></div>
+                    {% else %}
+                    <div class="chart-container-sm d-flex align-items-center justify-content-center">
+                        <div class="text-center text-muted"><i class="fa-solid fa-chart-bar fa-2x mb-2" style="opacity: 0.3;"></i><p class="mb-0" style="font-size: 0.85rem;">No task data in the last 24 hours</p></div>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
         <div class="col-lg-4">
             <div class="card h-100">
                 <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-chart-area" style="color: #3b82f6;"></i> Task Volume (7d)</div>
-                <div class="card-body"><div class="chart-container-sm"><canvas id="dailyChart"></canvas></div></div>
+                <div class="card-body">
+                    {% if has_daily_data %}
+                    <div class="chart-container-sm"><canvas id="dailyChart"></canvas></div>
+                    {% else %}
+                    <div class="chart-container-sm d-flex align-items-center justify-content-center">
+                        <div class="text-center text-muted"><i class="fa-solid fa-chart-area fa-2x mb-2" style="opacity: 0.3;"></i><p class="mb-0" style="font-size: 0.85rem;">No task data in the last 7 days</p></div>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
         <div class="col-lg-4">
             <div class="card h-100">
                 <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-layer-group" style="color: #8b5cf6;"></i> Queued vs Completed (24h)</div>
-                <div class="card-body"><div class="chart-container-sm"><canvas id="queueDepthChart"></canvas></div></div>
+                <div class="card-body">
+                    {% if has_queue_depth_data %}
+                    <div class="chart-container-sm"><canvas id="queueDepthChart"></canvas></div>
+                    {% else %}
+                    <div class="chart-container-sm d-flex align-items-center justify-content-center">
+                        <div class="text-center text-muted"><i class="fa-solid fa-layer-group fa-2x mb-2" style="opacity: 0.3;"></i><p class="mb-0" style="font-size: 0.85rem;">No queue data in the last 24 hours</p></div>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
@@ -592,6 +616,7 @@
             y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } },
         },
     };
+    {% if has_hourly_data %}
     new Chart(document.getElementById('hourlyChart'), {
         type: 'bar',
         data: {
@@ -603,6 +628,8 @@
         },
         options: { ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: true }, y: { ...chartOpts.scales.y, stacked: true } } },
     });
+    {% endif %}
+    {% if has_daily_data %}
     new Chart(document.getElementById('dailyChart'), {
         type: 'line',
         data: {
@@ -614,6 +641,8 @@
         },
         options: chartOpts,
     });
+    {% endif %}
+    {% if has_queue_depth_data %}
     new Chart(document.getElementById('queueDepthChart'), {
         type: 'line',
         data: {
@@ -625,6 +654,7 @@
         },
         options: chartOpts,
     });
+    {% endif %}
 
     // Bootstrap tooltips
     document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
