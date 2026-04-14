@@ -349,7 +349,11 @@ def _parse_schedule_timeline(periodic_tasks):
 
 
 def _parse_cron_field(field, max_val):
-    """Parse a crontab field like '0', '*/5', '1,15', '1-5' into a list of ints."""
+    """Parse a crontab field like '0', '*/5', '1,15', '1-5' into a list of ints.
+
+    All returned values are guaranteed to be in the range [0, max_val).
+    Out-of-bounds values from malformed crontab entries are silently dropped.
+    """
     field = str(field).strip()
     if field == "*":
         return list(range(max_val))
@@ -357,17 +361,31 @@ def _parse_cron_field(field, max_val):
     values = set()
     for part in field.split(","):
         part = part.strip()
-        if "/" in part:
-            base, step = part.split("/", 1)
-            step = int(step)
-            start = 0 if base == "*" else int(base)
-            values.update(range(start, max_val, step))
-        elif "-" in part:
-            start, end = part.split("-", 1)
-            values.update(range(int(start), int(end) + 1))
-        else:
-            values.add(int(part))
-    return sorted(values)
+        try:
+            if "/" in part:
+                base, step = part.split("/", 1)
+                step = int(step)
+                if step <= 0:
+                    continue
+                start = 0 if base == "*" else int(base)
+                values.update(range(start, max_val, step))
+            elif "-" in part:
+                start, end = part.split("-", 1)
+                values.update(range(int(start), int(end) + 1))
+            else:
+                values.add(int(part))
+        except (ValueError, TypeError):
+            logger.warning("Cron field part %r could not be parsed, skipping", part)
+            continue
+
+    # Filter to valid range [0, max_val)
+    valid = sorted(v for v in values if 0 <= v < max_val)
+    if len(valid) < len(values):
+        logger.warning(
+            "Cron field %r produced %d out-of-bounds value(s) (max_val=%d), dropped",
+            field, len(values) - len(valid), max_val,
+        )
+    return valid
 
 
 # ---------------------------------------------------------------------------

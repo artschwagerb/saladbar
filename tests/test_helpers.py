@@ -38,6 +38,39 @@ class ParseCronFieldTests(TestCase):
     def test_step_hours(self):
         self.assertEqual(_parse_cron_field("*/6", 24), [0, 6, 12, 18])
 
+    # -- Bounds validation tests --
+
+    def test_out_of_range_single_value(self):
+        """A value >= max_val should be dropped."""
+        self.assertEqual(_parse_cron_field("90", 24), [])
+
+    def test_out_of_range_large_step(self):
+        """*/500 with max_val=60 should return only [0]."""
+        self.assertEqual(_parse_cron_field("*/500", 60), [0])
+
+    def test_range_partially_out_of_bounds(self):
+        """25-30 with max_val=24 should return only values < 24."""
+        self.assertEqual(_parse_cron_field("22-30", 24), [22, 23])
+
+    def test_negative_value_dropped(self):
+        """Negative values should be dropped."""
+        self.assertEqual(_parse_cron_field("-1", 60), [])
+
+    def test_comma_with_mixed_valid_invalid(self):
+        """Valid and invalid values in a comma list; only valid ones kept."""
+        self.assertEqual(_parse_cron_field("5,70,10", 60), [5, 10])
+
+    def test_zero_step_skipped(self):
+        """A step of 0 should not cause an infinite loop."""
+        self.assertEqual(_parse_cron_field("*/0", 60), [])
+
+    def test_valid_inputs_unchanged(self):
+        """Existing valid inputs should not be affected by bounds checking."""
+        self.assertEqual(_parse_cron_field("0", 60), [0])
+        self.assertEqual(_parse_cron_field("59", 60), [59])
+        self.assertEqual(_parse_cron_field("0-23", 24), list(range(24)))
+        self.assertEqual(_parse_cron_field("*/15", 60), [0, 15, 30, 45])
+
 
 class GetExpectedIntervalTests(TestCase):
     def test_interval_minutes(self):
