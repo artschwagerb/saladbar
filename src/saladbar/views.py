@@ -21,7 +21,19 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django_celery_beat.models import PeriodicTask
 from django_celery_results.models import TaskResult
 
-from .conf import get_base_template, get_celery_app, get_queue_names
+from .conf import (
+    get_api_result_truncation,
+    get_base_template,
+    get_cache_ttl,
+    get_celery_app,
+    get_long_running_multiplier,
+    get_max_result_records,
+    get_max_runtime_records,
+    get_on_schedule_multiplier,
+    get_queue_names,
+    get_stale_multiplier,
+    get_task_history_limit,
+)
 
 # In-memory cache for expensive Celery inspector + Redis calls
 _infra_cache = {"data": None, "ts": 0}
@@ -42,7 +54,7 @@ def _ctx(extra=None):
 # ---------------------------------------------------------------------------
 
 
-def _get_infra_cached(ttl=30):
+def _get_infra_cached(ttl=None):
     """Return cached (workers, redis_info) to avoid repeated inspector/Redis calls.
 
     Celery inspector issues 4 network RPCs (ping, active, reserved, stats)
@@ -50,6 +62,8 @@ def _get_infra_cached(ttl=30):
     the dashboard.  Cache the result for *ttl* seconds so back-to-back or
     auto-refresh page loads are fast.
     """
+    if ttl is None:
+        ttl = get_cache_ttl()
     now = _time.monotonic()
     if _infra_cache["data"] and (now - _infra_cache["ts"]) < ttl:
         return _infra_cache["data"]
@@ -195,7 +209,8 @@ def _get_expected_interval(task):
 
 
 def _get_stale_tasks(periodic_tasks, now):
-    """Find enabled tasks that haven't run in 2x their schedule interval."""
+    """Find enabled tasks that haven't run within their expected schedule interval."""
+    stale_multiplier = get_stale_multiplier()
     stale = []
     for task in periodic_tasks:
         if not task.enabled:
@@ -208,7 +223,7 @@ def _get_stale_tasks(periodic_tasks, now):
         expected_seconds = _get_expected_interval(task)
         if expected_seconds:
             elapsed = (now - task.last_run_at).total_seconds()
-            threshold = expected_seconds * 2
+            threshold = expected_seconds * stale_multiplier
             if elapsed > threshold:
                 overdue_hours = round((elapsed - expected_seconds) / 3600, 1)
                 stale.append({"task": task, "reason": "Overdue", "overdue_hours": overdue_hours})
@@ -218,6 +233,7 @@ def _get_stale_tasks(periodic_tasks, now):
 
 def _get_periodic_health(periodic_tasks, now, last_24h):
     """Compute how many periodic tasks ran on schedule vs. missed in the last 24h."""
+    on_schedule_multiplier = get_on_schedule_multiplier()
     on_schedule = 0
     missed = 0
     never_run = 0
@@ -232,7 +248,7 @@ def _get_periodic_health(periodic_tasks, now, last_24h):
             continue
         if task.last_run_at >= last_24h:
             elapsed = (now - task.last_run_at).total_seconds()
-            if elapsed <= expected_seconds * 1.5:
+            if elapsed <= expected_seconds * on_schedule_multiplier:
                 on_schedule += 1
             else:
                 missed += 1
@@ -396,7 +412,7 @@ def dashboard(request):
             date_done__isnull=False,
         )
         .order_by("-date_done")
-        .values_list("date_created", "date_done", "task_name")[:2000]
+        .values_list("date_created", "date_done", "task_name")[:get_max_runtime_records()]
     ):
         if done and created:
             secs = (done - created).total_seconds()
@@ -546,7 +562,7 @@ def dashboard(request):
     queue_stats = defaultdict(lambda: {"total": 0, "success": 0, "failure": 0, "runtimes": []})
     for name, created, done, status in results_24h.values_list(
         "task_name", "date_created", "date_done", "status"
-    )[:5000]:
+    )[:get_max_result_records()]:
         if not name:
             continue
         queue = _resolve_queue(name)
@@ -596,10 +612,11 @@ def dashboard(request):
         })
 
     # -- Infrastructure (cached — avoids 1-4s of Celery inspector RPCs) --
-    workers, redis_info = _get_infra_cached(ttl=30)
+    workers, redis_info = _get_infra_cached()
     active_tasks, reserved_tasks = _get_in_flight_tasks(workers)
 
-    # Long-running task detection (3x avg runtime)
+    # Long-running task detection
+    long_running_multiplier = get_long_running_multiplier()
     for t in active_tasks:
         task_name = t.get("name") or t.get("type", "")
         avg_times = task_runtimes.get(task_name)
@@ -609,7 +626,7 @@ def dashboard(request):
             running_secs = now.timestamp() - time_start
             t["running_seconds"] = round(running_secs, 1)
             t["avg_runtime"] = round(avg_secs, 1)
-            if running_secs > avg_secs * 3 and avg_secs > 5:
+            if running_secs > avg_secs * long_running_multiplier and avg_secs > 5:
                 t["long_running"] = True
 
     context = _ctx({
@@ -711,7 +728,7 @@ def task_detail_by_name(request, task_name):
 def _render_task_detail(request, task):
     results = list(
         TaskResult.objects.filter(task_name=task.task)
-        .order_by("-date_done")[:50]
+        .order_by("-date_done")[:get_task_history_limit()]
     )
 
     # Runtime stats + chart data
@@ -856,5 +873,5 @@ def task_status(request, task_id):
     return JsonResponse({
         "task_id": task_id,
         "status": result.status,
-        "result": str(result.result)[:200] if result.result else None,
+        "result": str(result.result)[:get_api_result_truncation()] if result.result else None,
     })
