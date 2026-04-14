@@ -372,3 +372,103 @@ class ResultListFilterTests(TestCase):
         response = self.client.get("/saladbar/results/", {"status": "INVALID"})
         results = list(response.context["results"])
         self.assertEqual(len(results), 0)
+
+
+class RetryTrackingDashboardTests(TestCase):
+    """Test that retry tracking data is computed and passed to the dashboard."""
+
+    def setUp(self):
+        self.view_perm, _ = _get_or_create_permissions()
+        self.user = User.objects.create_user(username="viewer", password="testpass")
+        self.user.user_permissions.add(self.view_perm)
+        self.client.login(username="viewer", password="testpass")
+
+        now = timezone.now()
+        # Create some RETRY results
+        for i in range(3):
+            TaskResult.objects.create(
+                task_id=f"retry-a-{i}", task_name="app.flaky_task", status="RETRY",
+                date_done=now - timedelta(hours=1), date_created=now - timedelta(hours=1, minutes=5),
+            )
+        TaskResult.objects.create(
+            task_id="retry-b-1", task_name="app.other_task", status="RETRY",
+            date_done=now - timedelta(hours=2), date_created=now - timedelta(hours=2, minutes=1),
+        )
+        # A SUCCESS and FAILURE to make sure they're not counted as retries
+        TaskResult.objects.create(
+            task_id="success-1", task_name="app.flaky_task", status="SUCCESS",
+            date_done=now - timedelta(minutes=30), date_created=now - timedelta(minutes=35),
+        )
+        TaskResult.objects.create(
+            task_id="failure-1", task_name="app.flaky_task", status="FAILURE",
+            date_done=now - timedelta(minutes=15), date_created=now - timedelta(minutes=20),
+        )
+
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_dashboard_retry_tasks_in_context(self, mock_infra):
+        response = self.client.get("/saladbar/")
+        self.assertEqual(response.status_code, 200)
+        retry_tasks = response.context["retry_tasks"]
+        self.assertEqual(len(retry_tasks), 2)
+        # Sorted by total_retries desc, flaky_task has 3 retries
+        self.assertEqual(retry_tasks[0]["task_name"], "app.flaky_task")
+        self.assertEqual(retry_tasks[0]["total_retries"], 3)
+        self.assertEqual(retry_tasks[1]["task_name"], "app.other_task")
+        self.assertEqual(retry_tasks[1]["total_retries"], 1)
+
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_dashboard_total_retries_24h(self, mock_infra):
+        response = self.client.get("/saladbar/")
+        self.assertEqual(response.context["total_retries_24h"], 4)
+
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_dashboard_renders_retry_section(self, mock_infra):
+        response = self.client.get("/saladbar/")
+        self.assertContains(response, "Tasks with Retries")
+        self.assertContains(response, "app.flaky_task")
+
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_dashboard_no_retries_hides_section(self, mock_infra):
+        TaskResult.objects.filter(status="RETRY").delete()
+        response = self.client.get("/saladbar/")
+        self.assertNotContains(response, "Tasks with Retries")
+        self.assertEqual(response.context["total_retries_24h"], 0)
+
+
+class RetryTrackingTaskDetailTests(TestCase):
+    """Test that retry count is computed on the task detail page."""
+
+    def setUp(self):
+        self.view_perm, _ = _get_or_create_permissions()
+        self.user = User.objects.create_user(username="viewer", password="testpass")
+        self.user.user_permissions.add(self.view_perm)
+        self.client.login(username="viewer", password="testpass")
+
+        interval = IntervalSchedule.objects.create(every=10, period="seconds")
+        self.task = PeriodicTask.objects.create(
+            name="Flaky Task", task="app.flaky_task", enabled=True, interval=interval,
+        )
+
+        now = timezone.now()
+        TaskResult.objects.create(
+            task_id="r1", task_name="app.flaky_task", status="RETRY",
+            date_done=now - timedelta(hours=1), date_created=now - timedelta(hours=1, minutes=1),
+        )
+        TaskResult.objects.create(
+            task_id="r2", task_name="app.flaky_task", status="RETRY",
+            date_done=now - timedelta(hours=2), date_created=now - timedelta(hours=2, minutes=1),
+        )
+        TaskResult.objects.create(
+            task_id="s1", task_name="app.flaky_task", status="SUCCESS",
+            date_done=now - timedelta(minutes=30), date_created=now - timedelta(minutes=35),
+        )
+
+    def test_task_detail_retry_count(self):
+        response = self.client.get(f"/saladbar/tasks/{self.task.pk}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["retry_count"], 2)
+
+    def test_task_detail_retry_count_zero_when_none(self):
+        TaskResult.objects.filter(status="RETRY").delete()
+        response = self.client.get(f"/saladbar/tasks/{self.task.pk}/")
+        self.assertEqual(response.context["retry_count"], 0)

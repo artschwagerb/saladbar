@@ -576,8 +576,16 @@ def dashboard(request):
         .order_by("-failures")[:10]
     )
 
-    # Retry tracking — not available in this version of django-celery-results
-    retry_tasks = []
+    # -- Retry tracking (1 query) --
+    retry_tasks = list(
+        TaskResult.objects.filter(status="RETRY", date_done__gte=last_24h)
+        .values("task_name")
+        .annotate(
+            total_retries=Count("id"),
+        )
+        .order_by("-total_retries")[:10]
+    )
+    total_retries_24h = sum(rt["total_retries"] for rt in retry_tasks)
 
     # -- Per-queue stats (1 query, Python-side grouping) --
     queue_routing = getattr(settings, "CELERY_TASK_ROUTES", {})
@@ -692,6 +700,7 @@ def dashboard(request):
         "failure_by_task": failure_by_task,
         "error_groups": error_groups,
         "retry_tasks": retry_tasks,
+        "total_retries_24h": total_retries_24h,
         "queue_summary": queue_summary,
         # Queue depth chart
         "queue_depth_labels": json.dumps(queue_depth_labels),
@@ -816,7 +825,7 @@ def _render_task_detail(request, task):
 
     success_count = sum(1 for r in results if r.status == "SUCCESS")
     failure_count = sum(1 for r in results if r.status == "FAILURE")
-    retry_count = 0
+    retry_count = sum(1 for r in results if r.status == "RETRY")
 
     return render(request, "saladbar/task_detail.html", _ctx({
         "task": task,
