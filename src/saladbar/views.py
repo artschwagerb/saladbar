@@ -628,9 +628,11 @@ def dashboard(request):
         "chart_labels": json.dumps(chart_labels),
         "chart_success": json.dumps(chart_success),
         "chart_failure": json.dumps(chart_failure),
+        "has_hourly_data": bool(chart_labels),
         "daily_labels": json.dumps(daily_labels),
         "daily_success": json.dumps(daily_success),
         "daily_failure": json.dumps(daily_failure),
+        "has_daily_data": bool(daily_labels),
         # Tables
         "top_tasks": top_tasks,
         "slowest_tasks": slowest_tasks,
@@ -643,6 +645,7 @@ def dashboard(request):
         "queue_depth_labels": json.dumps(queue_depth_labels),
         "queue_depth_queued": json.dumps(queue_depth_queued),
         "queue_depth_completed": json.dumps(queue_depth_completed),
+        "has_queue_depth_data": bool(queue_depth_labels),
         # Stale / Schedule
         "stale_tasks": stale_tasks,
         "schedule_timeline": schedule_timeline,
