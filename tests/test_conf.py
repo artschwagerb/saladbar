@@ -3,6 +3,7 @@ from django.test import TestCase, override_settings
 from saladbar.conf import (
     get_api_result_truncation,
     get_base_template,
+    get_broker_url,
     get_cache_ttl,
     get_celery_app,
     get_long_running_multiplier,
@@ -117,3 +118,17 @@ class GetApiResultTruncationTests(TestCase):
     @override_settings(SALADBAR_API_RESULT_TRUNCATION=500)
     def test_override(self):
         self.assertEqual(get_api_result_truncation(), 500)
+
+
+class GetBrokerUrlTests(TestCase):
+    def test_default_falls_back_to_celery_broker_url(self):
+        # Test settings has CELERY_BROKER_URL = "redis://localhost:6379/0"
+        self.assertEqual(get_broker_url(), "redis://localhost:6379/0")
+
+    @override_settings(SALADBAR_BROKER_URL="redis://custom:6380/2")
+    def test_override_takes_precedence(self):
+        self.assertEqual(get_broker_url(), "redis://custom:6380/2")
+
+    @override_settings(CELERY_BROKER_URL="redis://other:6379/1")
+    def test_uses_celery_broker_url_when_no_override(self):
+        self.assertEqual(get_broker_url(), "redis://other:6379/1")
