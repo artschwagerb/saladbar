@@ -5,6 +5,7 @@ Users can override these in their Django settings module:
 
     SALADBAR_BASE_TEMPLATE = "myapp/base.html"
     SALADBAR_CELERY_APP = "myproject.celery.app"
+    SALADBAR_BROKER_URL = "redis://custom:6379/1"
     SALADBAR_CACHE_TTL = 60
     SALADBAR_STALE_MULTIPLIER = 2.0
     SALADBAR_ON_SCHEDULE_MULTIPLIER = 1.5
@@ -27,6 +28,9 @@ DEFAULT_CELERY_APP = None
 
 # Queue names to check for depth on the dashboard.
 DEFAULT_QUEUE_NAMES = ("celery", "default", "bulk")
+
+# Optional broker URL override. When None, falls back to CELERY_BROKER_URL.
+DEFAULT_BROKER_URL = None
 
 # Infra cache TTL in seconds (Celery inspector + Redis info).
 DEFAULT_CACHE_TTL = 30
@@ -73,6 +77,13 @@ def get_celery_app():
 
 def get_queue_names():
     return getattr(settings, "SALADBAR_QUEUE_NAMES", DEFAULT_QUEUE_NAMES)
+
+
+def get_broker_url():
+    url = getattr(settings, "SALADBAR_BROKER_URL", DEFAULT_BROKER_URL)
+    if url:
+        return url
+    return getattr(settings, "CELERY_BROKER_URL", "redis://localhost:6379/0")
 
 
 def get_cache_ttl():

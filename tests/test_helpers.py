@@ -1,12 +1,14 @@
 from datetime import timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 from django.utils import timezone
 
+import saladbar.views as views_module
 from saladbar.views import (
     _get_error_groups,
     _get_expected_interval,
+    _get_redis_client,
     _get_stale_tasks,
     _parse_cron_field,
     _parse_schedule_timeline,
@@ -203,3 +205,42 @@ class ParseScheduleTimelineTests(TestCase):
         task.crontab = None
         timeline = _parse_schedule_timeline([task])
         self.assertEqual(len(timeline), 0)
+
+
+class RedisConnectionPoolTests(TestCase):
+    def setUp(self):
+        # Reset the module-level pool before each test
+        self._original_pool = views_module._redis_pool
+        views_module._redis_pool = None
+
+    def tearDown(self):
+        views_module._redis_pool = self._original_pool
+
+    @patch("saladbar.views.redis.ConnectionPool.from_url")
+    def test_pool_created_on_first_call(self, mock_from_url):
+        mock_pool = MagicMock()
+        mock_from_url.return_value = mock_pool
+
+        client = _get_redis_client()
+        mock_from_url.assert_called_once()
+        self.assertIsNotNone(views_module._redis_pool)
+
+    @patch("saladbar.views.redis.ConnectionPool.from_url")
+    def test_pool_reused_on_second_call(self, mock_from_url):
+        mock_pool = MagicMock()
+        mock_from_url.return_value = mock_pool
+
+        _get_redis_client()
+        _get_redis_client()
+        # from_url should only be called once — the pool is reused
+        mock_from_url.assert_called_once()
+
+    @patch("saladbar.views.redis.ConnectionPool.from_url")
+    def test_client_uses_shared_pool(self, mock_from_url):
+        mock_pool = MagicMock()
+        mock_from_url.return_value = mock_pool
+
+        client1 = _get_redis_client()
+        client2 = _get_redis_client()
+        # Both clients should use the same pool
+        self.assertIs(client1.connection_pool, client2.connection_pool)

@@ -24,6 +24,7 @@ from django_celery_results.models import TaskResult
 from .conf import (
     get_api_result_truncation,
     get_base_template,
+    get_broker_url,
     get_cache_ttl,
     get_celery_app,
     get_long_running_multiplier,
@@ -37,6 +38,10 @@ from .conf import (
 
 # In-memory cache for expensive Celery inspector + Redis calls
 _infra_cache = {"data": None, "ts": 0}
+
+# Module-level Redis connection pool — shared across requests within a process.
+# Lazily initialized on first use. The pool handles reconnection automatically.
+_redis_pool = None
 
 logger = logging.getLogger("saladbar")
 
@@ -73,10 +78,22 @@ def _get_infra_cached(ttl=None):
     return result
 
 
+def _get_redis_client():
+    """Return a Redis client backed by a shared connection pool.
+
+    The pool is created once per process and reused across all requests,
+    avoiding the overhead of opening/closing a connection on every call.
+    """
+    global _redis_pool
+    if _redis_pool is None:
+        _redis_pool = redis.ConnectionPool.from_url(get_broker_url())
+    return redis.Redis(connection_pool=_redis_pool)
+
+
 def _get_redis_info():
     """Get Redis broker info for queue inspection."""
     try:
-        r = redis.from_url(settings.CELERY_BROKER_URL)
+        r = _get_redis_client()
         info = r.info()
         # Check known Celery queue names directly instead of scanning all keys
         queue_lengths = {}
