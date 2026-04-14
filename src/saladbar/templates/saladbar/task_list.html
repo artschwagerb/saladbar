@@ -101,22 +101,38 @@
     </div>
 
     <!-- Filter -->
-    <div class="filter-bar mb-4">
+    <form method="get" class="filter-bar mb-4">
         <div class="row g-3 align-items-end">
             <div class="col-auto">
                 <label class="form-label fw-semibold mb-1" style="font-size: 0.8rem; color: #475569;">Status</label>
-                <select class="form-select form-select-sm" id="filter-status" style="border-radius: 8px; min-width: 140px;">
-                    <option value="all">All</option>
-                    <option value="enabled">Enabled</option>
-                    <option value="disabled">Disabled</option>
+                <select class="form-select form-select-sm" name="enabled" style="border-radius: 8px; min-width: 140px;">
+                    <option value="">All</option>
+                    <option value="true"{% if filter_enabled == "true" %} selected{% endif %}>Enabled</option>
+                    <option value="false"{% if filter_enabled == "false" %} selected{% endif %}>Disabled</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label fw-semibold mb-1" style="font-size: 0.8rem; color: #475569;">Schedule Type</label>
+                <select class="form-select form-select-sm" name="type" style="border-radius: 8px; min-width: 140px;">
+                    <option value="">All</option>
+                    <option value="interval"{% if filter_type == "interval" %} selected{% endif %}>Interval</option>
+                    <option value="crontab"{% if filter_type == "crontab" %} selected{% endif %}>Crontab</option>
+                    <option value="solar"{% if filter_type == "solar" %} selected{% endif %}>Solar</option>
+                    <option value="clocked"{% if filter_type == "clocked" %} selected{% endif %}>Clocked</option>
                 </select>
             </div>
             <div class="col-auto">
                 <label class="form-label fw-semibold mb-1" style="font-size: 0.8rem; color: #475569;">Search</label>
-                <input type="text" class="form-control form-control-sm" id="filter-search" placeholder="Filter by name..." style="border-radius: 8px; min-width: 240px;">
+                <input type="text" class="form-control form-control-sm" name="search" placeholder="Filter by name..." value="{{ filter_search }}" style="border-radius: 8px; min-width: 240px;">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm" style="border-radius: 8px;"><i class="fa-solid fa-filter me-1"></i>Apply</button>
+                {% if filter_enabled or filter_search or filter_type %}
+                <a href="{% url 'saladbar:task-list' %}" class="btn btn-outline-secondary btn-sm ms-1" style="border-radius: 8px;">Clear</a>
+                {% endif %}
             </div>
         </div>
-    </div>
+    </form>
 
     <div class="card">
         <div class="card-body p-0">
@@ -204,24 +220,7 @@
 
 {% block script-footer %}
 <script>
-    const filterStatus = document.getElementById('filter-status');
-    const filterSearch = document.getElementById('filter-search');
-    const rows = document.querySelectorAll('#task-table tbody tr[data-enabled]');
-
-    function applyFilters() {
-        const status = filterStatus.value;
-        const search = filterSearch.value.toLowerCase();
-        rows.forEach(row => {
-            const enabled = row.dataset.enabled === 'True';
-            const name = row.dataset.name;
-            let show = true;
-            if (status === 'enabled' && !enabled) show = false;
-            if (status === 'disabled' && enabled) show = false;
-            if (search && !name.includes(search)) show = false;
-            row.style.display = show ? '' : 'none';
-        });
-    }
-    filterStatus.addEventListener('change', applyFilters);
-    filterSearch.addEventListener('input', applyFilters);
+    // Bootstrap tooltips
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
 </script>
 {% endblock script-footer %}

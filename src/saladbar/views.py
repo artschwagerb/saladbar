@@ -684,9 +684,31 @@ def dashboard(request):
 @login_required
 @permission_required("saladbar.can_view_saladbar", raise_exception=True)
 def task_list(request):
-    tasks = list(
-        PeriodicTask.objects.select_related("interval", "crontab").order_by("name")
-    )
+    qs = PeriodicTask.objects.select_related("interval", "crontab").order_by("name")
+
+    # Server-side filters
+    filter_enabled = request.GET.get("enabled", "")
+    filter_search = request.GET.get("search", "")
+    filter_type = request.GET.get("type", "")
+
+    if filter_enabled == "true":
+        qs = qs.filter(enabled=True)
+    elif filter_enabled == "false":
+        qs = qs.filter(enabled=False)
+
+    if filter_search:
+        qs = qs.filter(name__icontains=filter_search)
+
+    if filter_type == "interval":
+        qs = qs.filter(interval__isnull=False)
+    elif filter_type == "crontab":
+        qs = qs.filter(crontab__isnull=False)
+    elif filter_type == "solar":
+        qs = qs.filter(solar__isnull=False)
+    elif filter_type == "clocked":
+        qs = qs.filter(clocked__isnull=False)
+
+    tasks = list(qs)
 
     # Bulk-fetch latest result and run history to avoid N+1 queries
     task_names = {task.task for task in tasks}
@@ -708,7 +730,12 @@ def task_list(request):
         task.latest_result = latest_results.get(task.task)
         task.run_history = run_histories.get(task.task, [])
 
-    return render(request, "saladbar/task_list.html", _ctx({"tasks": tasks}))
+    return render(request, "saladbar/task_list.html", _ctx({
+        "tasks": tasks,
+        "filter_enabled": filter_enabled,
+        "filter_search": filter_search,
+        "filter_type": filter_type,
+    }))
 
 
 @login_required
@@ -818,8 +845,34 @@ def result_list(request):
     limit = 1000
     if request.GET.get("all"):
         limit = 5000
-    results = TaskResult.objects.order_by("-date_done")[:limit]
-    return render(request, "saladbar/result_list.html", _ctx({"results": results, "limit": limit}))
+
+    qs = TaskResult.objects.order_by("-date_done")
+
+    # Server-side filters
+    filter_status = request.GET.get("status", "")
+    filter_task_name = request.GET.get("task_name", "")
+    filter_date_from = request.GET.get("date_from", "")
+    filter_date_to = request.GET.get("date_to", "")
+
+    if filter_status:
+        qs = qs.filter(status=filter_status)
+    if filter_task_name:
+        qs = qs.filter(task_name__icontains=filter_task_name)
+    if filter_date_from:
+        qs = qs.filter(date_done__gte=filter_date_from)
+    if filter_date_to:
+        qs = qs.filter(date_done__lte=filter_date_to)
+
+    results = qs[:limit]
+
+    return render(request, "saladbar/result_list.html", _ctx({
+        "results": results,
+        "limit": limit,
+        "filter_status": filter_status,
+        "filter_task_name": filter_task_name,
+        "filter_date_from": filter_date_from,
+        "filter_date_to": filter_date_to,
+    }))
 
 
 @login_required

@@ -62,9 +62,9 @@
                 </ol>
             </nav>
             <h1 class="fw-bold">Task Logs</h1>
-            <p class="text-muted mb-0">Showing last {{ limit }} task executions.
+            <p class="text-muted mb-0">Showing {% if filter_status or filter_task_name or filter_date_from or filter_date_to %}filtered{% endif %} results (limit {{ limit }}).
                 {% if limit == 1000 %}
-                <a href="?all=1">Show all (5000)</a>
+                <a href="?all=1{% if filter_status %}&status={{ filter_status }}{% endif %}{% if filter_task_name %}&task_name={{ filter_task_name }}{% endif %}{% if filter_date_from %}&date_from={{ filter_date_from }}{% endif %}{% if filter_date_to %}&date_to={{ filter_date_to }}{% endif %}">Show more (5000)</a>
                 {% endif %}
             </p>
         </div>
@@ -74,23 +74,40 @@
     </div>
 
     <!-- Filter -->
-    <div class="filter-bar mb-4">
+    <form method="get" class="filter-bar mb-4">
+        {% if limit == 5000 %}<input type="hidden" name="all" value="1">{% endif %}
         <div class="row g-3 align-items-end">
             <div class="col-auto">
                 <label class="form-label fw-semibold mb-1" style="font-size: 0.8rem; color: #475569;">Status</label>
-                <select class="form-select form-select-sm" id="filter-status" style="border-radius: 8px; min-width: 140px;">
-                    <option value="all">All</option>
-                    <option value="SUCCESS">Success</option>
-                    <option value="FAILURE">Failure</option>
-                    <option value="STARTED">Started</option>
+                <select class="form-select form-select-sm" name="status" style="border-radius: 8px; min-width: 140px;">
+                    <option value="">All</option>
+                    <option value="SUCCESS"{% if filter_status == "SUCCESS" %} selected{% endif %}>Success</option>
+                    <option value="FAILURE"{% if filter_status == "FAILURE" %} selected{% endif %}>Failure</option>
+                    <option value="STARTED"{% if filter_status == "STARTED" %} selected{% endif %}>Started</option>
+                    <option value="PENDING"{% if filter_status == "PENDING" %} selected{% endif %}>Pending</option>
+                    <option value="REVOKED"{% if filter_status == "REVOKED" %} selected{% endif %}>Revoked</option>
                 </select>
             </div>
             <div class="col-auto">
-                <label class="form-label fw-semibold mb-1" style="font-size: 0.8rem; color: #475569;">Search</label>
-                <input type="text" class="form-control form-control-sm" id="filter-search" placeholder="Filter by task name..." style="border-radius: 8px; min-width: 240px;">
+                <label class="form-label fw-semibold mb-1" style="font-size: 0.8rem; color: #475569;">Task Name</label>
+                <input type="text" class="form-control form-control-sm" name="task_name" placeholder="Filter by task name..." value="{{ filter_task_name }}" style="border-radius: 8px; min-width: 240px;">
+            </div>
+            <div class="col-auto">
+                <label class="form-label fw-semibold mb-1" style="font-size: 0.8rem; color: #475569;">From</label>
+                <input type="date" class="form-control form-control-sm" name="date_from" value="{{ filter_date_from }}" style="border-radius: 8px;">
+            </div>
+            <div class="col-auto">
+                <label class="form-label fw-semibold mb-1" style="font-size: 0.8rem; color: #475569;">To</label>
+                <input type="date" class="form-control form-control-sm" name="date_to" value="{{ filter_date_to }}" style="border-radius: 8px;">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm" style="border-radius: 8px;"><i class="fa-solid fa-filter me-1"></i>Apply</button>
+                {% if filter_status or filter_task_name or filter_date_from or filter_date_to %}
+                <a href="{% url 'saladbar:result-list' %}{% if limit == 5000 %}?all=1{% endif %}" class="btn btn-outline-secondary btn-sm ms-1" style="border-radius: 8px;">Clear</a>
+                {% endif %}
             </div>
         </div>
-    </div>
+    </form>
 
     <div class="card mb-4">
         <div class="card-body p-0">
@@ -146,23 +163,7 @@
 
 {% block script-footer %}
 <script>
-    const filterStatus = document.getElementById('filter-status');
-    const filterSearch = document.getElementById('filter-search');
-    const rows = document.querySelectorAll('#log-table tbody tr[data-status]');
-
-    function applyFilters() {
-        const status = filterStatus.value;
-        const search = filterSearch.value.toLowerCase();
-        rows.forEach(row => {
-            const rowStatus = row.dataset.status;
-            const name = row.dataset.name;
-            let show = true;
-            if (status !== 'all' && rowStatus !== status) show = false;
-            if (search && !name.includes(search)) show = false;
-            row.style.display = show ? '' : 'none';
-        });
-    }
-    filterStatus.addEventListener('change', applyFilters);
-    filterSearch.addEventListener('input', applyFilters);
+    // Bootstrap tooltips
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
 </script>
 {% endblock script-footer %}
