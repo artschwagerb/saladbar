@@ -43,7 +43,9 @@ src/saladbar/
 - **Configurable Celery app.** Uses `celery.current_app` by default. Users can set `SALADBAR_CELERY_APP = "myproject.celery.app"` for explicit resolution.
 - **Chart.js is vendored as a static file** (`static/saladbar/js/chart.min.js`), not loaded from CDN. Pinned to 4.5.1.
 - **CDN resources in `base.html` only.** The default `base.html` fallback uses CDN for Bootstrap/FontAwesome with SRI hashes. Page templates never load these — that's the base template's responsibility.
-- **In-memory cache** (`_infra_cache`) caches Celery inspector + Redis info for 30 seconds to avoid 1-4s latency on every page load. Module-level dict, per-process.
+- **In-memory cache** (`_infra_cache`) caches Celery inspector + Redis info (configurable via `SALADBAR_CACHE_TTL`, default 30s) to avoid 1-4s latency on every page load. Module-level dict, per-process.
+- **Redis connection pooling.** A module-level `ConnectionPool` is lazily initialized and reused across requests, avoiding per-request connection overhead.
+- **Server-side filtering.** Task list and result list views support server-side filtering via GET parameters (bookmarkable URLs).
 
 ### Settings (all optional)
 
@@ -52,6 +54,17 @@ src/saladbar/
 | `SALADBAR_BASE_TEMPLATE` | `"saladbar/base.html"` | Template all pages extend (must provide blocks: title, css, content, script-footer) |
 | `SALADBAR_CELERY_APP` | `None` (auto-discover) | Dotted path to Celery app instance |
 | `SALADBAR_QUEUE_NAMES` | `("celery", "default", "bulk")` | Queue names to check for depth |
+| `SALADBAR_BROKER_URL` | `None` (falls back to `CELERY_BROKER_URL`) | Optional Redis broker URL override |
+| `SALADBAR_CACHE_TTL` | `30` | Infra cache TTL in seconds |
+| `SALADBAR_STALE_MULTIPLIER` | `2.0` | Multiplier for stale task detection threshold |
+| `SALADBAR_ON_SCHEDULE_MULTIPLIER` | `1.5` | Multiplier for on-schedule tolerance |
+| `SALADBAR_LONG_RUNNING_MULTIPLIER` | `3.0` | Multiplier for long-running task detection |
+| `SALADBAR_MAX_RUNTIME_RECORDS` | `2000` | Max runtime records for avg/slowest calculations |
+| `SALADBAR_TASK_HISTORY_LIMIT` | `50` | Max entries on task detail history |
+| `SALADBAR_MAX_RESULT_RECORDS` | `5000` | Max result records for per-queue stats |
+| `SALADBAR_API_RESULT_TRUNCATION` | `200` | Max chars in task-status API result |
+| `SALADBAR_METRICS_ENABLED` | `False` | Enable the Prometheus `/metrics/` endpoint |
+| `SALADBAR_METRICS_TOKEN` | `None` | Bearer token for Prometheus scraper auth |
 
 ### Permissions
 
@@ -76,12 +89,13 @@ All under `app_name = "saladbar"`:
 | `/revoke/<task_id>/` | `task-revoke` | POST: revoke/terminate task | manage |
 | `/queue/purge/` | `queue-purge` | POST: purge all queued tasks | manage |
 | `/api/task-status/<task_id>/` | `task-status` | JSON: task status + truncated result | view |
+| `/metrics/` | `metrics` | Prometheus metrics (opt-in) | view or token |
 
 ### views.py Structure
 
 The file is organized as:
-1. **Helpers** (lines ~35-350): `_get_infra_cached`, `_get_redis_info`, `_get_worker_info`, `_get_in_flight_tasks`, `_get_expected_interval`, `_get_stale_tasks`, `_get_periodic_health`, `_get_error_groups`, `_parse_schedule_timeline`, `_parse_cron_field`
-2. **Views** (lines ~350-860): `dashboard`, `task_list`, `task_detail`, `task_detail_by_name`, `_render_task_detail`, `task_run`, `task_revoke`, `result_list`, `result_detail`, `queue_purge`, `task_status`
+1. **Helpers** (lines ~35-410): `_get_redis_client`, `_get_infra_cached`, `_get_redis_info`, `_get_worker_info`, `_get_in_flight_tasks`, `_expand_crontab`, `_get_expected_interval`, `_get_stale_tasks`, `_get_periodic_health`, `_get_error_groups`, `_parse_schedule_timeline`, `_parse_cron_field`
+2. **Views** (lines ~410-980): `dashboard`, `task_list`, `task_detail`, `task_detail_by_name`, `_render_task_detail`, `task_run`, `task_revoke`, `result_list`, `result_detail`, `queue_purge`, `task_status`, `prometheus_metrics`
 
 The `_ctx()` helper injects `saladbar_base_template` into every template context.
 
@@ -93,11 +107,11 @@ The app reads from these django-celery models but does not define any Celery tas
 
 ## Testing
 
-45 tests in `tests/` using Django's test framework with SQLite in-memory DB:
+100+ tests in `tests/` using Django's test framework with SQLite in-memory DB:
 
-- `test_helpers.py` — Pure logic tests for cron parsing, interval calculation, error grouping, stale detection, timeline parsing
-- `test_conf.py` — Settings resolution with `@override_settings`
-- `test_views.py` — Permission enforcement (login, view perm, manage perm), view rendering, API response format, result truncation
+- `test_helpers.py` — Pure logic tests for cron parsing, interval calculation, error grouping, stale detection, timeline parsing, crontab expansion, Redis connection pool
+- `test_conf.py` — Settings resolution with `@override_settings` for all configurable settings
+- `test_views.py` — Permission enforcement, view rendering, API response format, result truncation, empty-state rendering, server-side filtering (task list + result list), retry tracking, Prometheus metrics endpoint
 
 Tests mock Celery inspector and Redis calls — no running services needed. Test settings in `tests/settings.py`.
 
