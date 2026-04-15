@@ -21,11 +21,11 @@
     .table tbody td { padding: 0.75rem; vertical-align: middle; font-size: 0.875rem; color: #1e293b; }
     .chart-container { position: relative; height: 280px; }
     .chart-container-sm { position: relative; height: 220px; }
-    .worker-card { border-radius: 12px; border: 1px solid #e2e8f0; padding: 1rem; background: #fff; }
-    .worker-name { font-weight: 600; font-size: 0.9rem; color: #1e293b; word-break: break-all; }
+    .worker-card { border-radius: 12px; border: 1px solid #e2e8f0; padding: 0.75rem 1rem; background: #fff; }
+    .worker-name { font-weight: 600; font-size: 0.85rem; color: #1e293b; word-break: break-all; }
     .worker-meta { font-size: 0.8rem; color: #64748b; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-    .task-name-short { font-weight: 600; font-size: 0.85rem; color: #1e293b; }
+    .task-name-short { font-weight: 600; font-size: 0.85rem; color: #1e293b; word-break: break-all; }
     .queue-badge { font-size: 0.8rem; font-weight: 600; padding: 0.25rem 0.6rem; border-radius: 6px; }
     /* Timeline */
     .timeline-grid { display: flex; position: relative; border-bottom: 2px solid #e2e8f0; }
@@ -56,6 +56,23 @@
     .health-card { border-radius: 12px; border: 1px solid #e2e8f0; padding: 0.75rem 1rem; background: #fff; text-align: center; }
     .health-card .health-value { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
     .health-card .health-label { font-size: 0.75rem; color: #64748b; font-weight: 500; }
+    /* Error text: dark enough to read, not pure red */
+    .error-text { font-size: 0.8rem; color: #991b1b; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .error-mono { font-weight: 600; font-size: 0.82rem; color: #7f1d1d; font-family: monospace; word-break: break-all; }
+    /* Wide-screen: 3-up table rows on xl, 4-up on xxl */
+    @media (min-width: 1400px) {
+        .col-xxl-4 { flex: 0 0 33.3333%; max-width: 33.3333%; }
+        .col-xxl-3 { flex: 0 0 25%; max-width: 25%; }
+        .col-xxl-6 { flex: 0 0 50%; max-width: 50%; }
+    }
+    @media (min-width: 1800px) {
+        .col-4k-3 { flex: 0 0 25%; max-width: 25%; }
+        .col-4k-4 { flex: 0 0 33.3333%; max-width: 33.3333%; }
+    }
+    /* Worker grid: compact side-by-side cards */
+    .worker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.5rem; }
+    .worker-card-compact { border-radius: 10px; border: 1px solid #e2e8f0; padding: 0.625rem 0.75rem; background: #fff; font-size: 0.82rem; }
+    .worker-card-compact .worker-name { font-size: 0.82rem; }
 </style>
 {% endblock css %}
 
@@ -324,55 +341,67 @@
     </div>
     {% endif %}
 
-    <!-- Workers + Queue Row -->
+    <!-- Workers + Queue Stats Row -->
     <div class="row g-4 mb-4">
         <!-- Workers -->
-        <div class="col-lg-{% if queue_summary %}6{% else %}12{% endif %}">
-            <div class="section-header"><i class="fa-solid fa-server" style="color: #3b82f6;"></i> Workers</div>
-            {% for worker in workers %}
-            <div class="worker-card mb-2">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div class="worker-name">
-                        <span class="status-dot me-1" style="background: {% if worker.online %}#10b981{% else %}#ef4444{% endif %};"></span>
-                        {{ worker.name }}
+        <div class="col-lg-{% if queue_summary %}7{% else %}12{% endif %} col-xxl-{% if queue_summary %}8{% else %}12{% endif %}">
+            <div class="section-header"><i class="fa-solid fa-server" style="color: #3b82f6;"></i> Workers ({{ workers|length }})</div>
+            <div class="worker-grid">
+                {% for worker in workers %}
+                <div class="worker-card-compact">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <div class="worker-name">
+                            <span class="status-dot me-1" style="background: {% if worker.online %}#10b981{% else %}#ef4444{% endif %};"></span>
+                            {{ worker.name }}
+                        </div>
+                        <span class="badge {% if worker.online %}bg-success{% else %}bg-danger{% endif %}" style="font-size: 0.65rem;">{% if worker.online %}online{% else %}offline{% endif %}</span>
                     </div>
-                    <span class="badge {% if worker.online %}bg-success{% else %}bg-danger{% endif %}">{% if worker.online %}online{% else %}offline{% endif %}</span>
-                </div>
-                <div class="worker-meta mb-2">
-                    <div><i class="fa-solid fa-play me-1"></i> Active: {{ worker.active_tasks }} | Reserved: {{ worker.reserved_tasks }}{% if worker.concurrency %} | Concurrency: {{ worker.concurrency }}{% endif %}</div>
-                </div>
-                {% if worker.concurrency %}
-                <div class="d-flex align-items-center gap-2">
-                    <span style="font-size: 0.75rem; color: #64748b; min-width: 65px;">Pool {{ worker.utilization }}%</span>
-                    <div class="util-bar-bg flex-grow-1">
-                        <div class="util-bar" style="width: {{ worker.utilization }}%; background: {% if worker.utilization > 80 %}#ef4444{% elif worker.utilization > 50 %}#f59e0b{% else %}#10b981{% endif %};"></div>
+                    <div class="d-flex gap-3 mb-1" style="font-size: 0.78rem; color: #64748b;">
+                        <span><i class="fa-solid fa-play me-1"></i>{{ worker.active_tasks }} active</span>
+                        <span><i class="fa-solid fa-pause me-1"></i>{{ worker.reserved_tasks }} reserved</span>
+                        {% if worker.concurrency %}<span><i class="fa-solid fa-cubes me-1"></i>{{ worker.concurrency }} slots</span>{% endif %}
                     </div>
+                    {% if worker.concurrency %}
+                    <div class="d-flex align-items-center gap-2">
+                        <span style="font-size: 0.72rem; color: #64748b; min-width: 50px;">{{ worker.utilization }}%</span>
+                        <div class="util-bar-bg flex-grow-1">
+                            <div class="util-bar" style="width: {{ worker.utilization }}%; background: {% if worker.utilization > 80 %}#ef4444{% elif worker.utilization > 50 %}#f59e0b{% else %}#10b981{% endif %};"></div>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
-                {% endif %}
+                {% empty %}
+                <p class="text-muted" style="font-size: 0.85rem;">No workers responding.</p>
+                {% endfor %}
             </div>
-            {% empty %}
-            <p class="text-muted" style="font-size: 0.85rem;">No workers responding.</p>
-            {% endfor %}
         </div>
 
-        <!-- Per-Queue Stats -->
+        <!-- Per-Queue Stats (compact table) -->
         {% if queue_summary %}
-        <div class="col-lg-6">
+        <div class="col-lg-5 col-xxl-4">
             <div class="section-header"><i class="fa-solid fa-layer-group" style="color: #8b5cf6;"></i> Queue Stats (24h)</div>
-            {% for q in queue_summary %}
-            <div class="worker-card mb-2">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span style="font-weight: 700; font-size: 0.95rem;">{{ q.name }}</span>
-                    <span class="badge bg-primary">{{ q.total }} tasks</span>
-                </div>
-                <div class="d-flex gap-4" style="font-size: 0.8rem; color: #64748b;">
-                    <span><i class="fa-solid fa-check text-success me-1"></i>{{ q.success }} success</span>
-                    <span><i class="fa-solid fa-xmark text-danger me-1"></i>{{ q.failure }} failed</span>
-                    <span><i class="fa-solid fa-percent me-1"></i>{{ q.success_rate }}% rate</span>
-                    <span><i class="fa-solid fa-stopwatch me-1"></i>{{ q.avg_runtime }}s avg</span>
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead><tr><th>Queue</th><th class="text-end">Tasks</th><th class="text-end">Rate</th><th class="text-end">Avg</th></tr></thead>
+                            <tbody>
+                                {% for q in queue_summary %}
+                                <tr>
+                                    <td><span style="font-weight: 700; font-size: 0.85rem;">{{ q.name }}</span></td>
+                                    <td class="text-end" style="font-size: 0.82rem;">
+                                        {{ q.total }}
+                                        {% if q.failure > 0 %}<span class="text-danger ms-1">({{ q.failure }} fail)</span>{% endif %}
+                                    </td>
+                                    <td class="text-end" style="font-size: 0.82rem;">{{ q.success_rate }}%</td>
+                                    <td class="text-end" style="font-size: 0.82rem;">{{ q.avg_runtime }}s</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-            {% endfor %}
         </div>
         {% endif %}
     </div>
@@ -392,7 +421,7 @@
                     <tbody>
                         {% for t in active_tasks %}
                         <tr{% if t.long_running %} style="background: #fef2f2;"{% endif %}>
-                            <td><span class="task-name-short">{{ t.name|default:t.type|truncatechars:50 }}</span></td>
+                            <td><span class="task-name-short">{{ t.name|default:t.type|truncatechars:70 }}</span></td>
                             <td style="font-family: monospace; font-size: 0.8rem;">{{ t.id|truncatechars:12 }}</td>
                             <td style="font-size: 0.8rem; color: #64748b;">{{ t.worker_name|truncatechars:30 }}</td>
                             <td>
@@ -419,7 +448,7 @@
                         {% endfor %}
                         {% for t in reserved_tasks %}
                         <tr>
-                            <td><span class="task-name-short">{{ t.name|default:t.type|truncatechars:50 }}</span></td>
+                            <td><span class="task-name-short">{{ t.name|default:t.type|truncatechars:70 }}</span></td>
                             <td style="font-family: monospace; font-size: 0.8rem;">{{ t.id|truncatechars:12 }}</td>
                             <td style="font-size: 0.8rem; color: #64748b;">{{ t.worker_name|truncatechars:30 }}</td>
                             <td><span class="badge bg-secondary">reserved</span></td>
@@ -445,7 +474,7 @@
 
     <!-- Tables Row -->
     <div class="row g-4 mb-4">
-        <div class="col-lg-6">
+        <div class="col-lg-6 col-xxl-6">
             <div class="card h-100">
                 <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-ranking-star" style="color: #f59e0b;"></i> Most Active Tasks (24h)</div>
                 <div class="card-body p-0">
@@ -455,7 +484,7 @@
                             <tbody>
                                 {% for t in top_tasks %}
                                 <tr>
-                                    <td><span class="task-name-short">{{ t.task_name|truncatechars:50 }}</span></td>
+                                    <td><span class="task-name-short">{{ t.task_name|truncatechars:70 }}</span></td>
                                     <td class="text-end">{{ t.count }}</td>
                                     <td class="text-end">{% if t.failures > 0 %}<span class="text-danger fw-bold">{{ t.failures }}</span>{% else %}<span class="text-muted">0</span>{% endif %}</td>
                                     <td class="text-center">
@@ -489,7 +518,7 @@
                             <tbody>
                                 {% for t in slowest_tasks %}
                                 <tr>
-                                    <td><span class="task-name-short">{{ t.task_name|truncatechars:50 }}</span></td>
+                                    <td><span class="task-name-short">{{ t.task_name|truncatechars:70 }}</span></td>
                                     <td class="text-end">{{ t.avg_seconds }}s</td>
                                     <td class="text-end">{{ t.count }}</td>
                                 </tr>
@@ -517,7 +546,7 @@
                             <tbody>
                                 {% for eg in error_groups %}
                                 <tr>
-                                    <td><span style="font-weight: 600; font-size: 0.85rem; color: #991b1b; font-family: monospace;">{{ eg.exception|truncatechars:40 }}</span></td>
+                                    <td><span class="error-mono">{{ eg.exception }}</span></td>
                                     <td class="text-end"><span class="text-danger fw-bold">{{ eg.count }}</span></td>
                                     <td class="text-end">{{ eg.affected_tasks }}</td>
                                     <td>{% if eg.latest_id %}<a href="{% url 'saladbar:result-detail' eg.latest_id %}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.75rem;"><i class="fa-solid fa-eye"></i></a>{% endif %}</td>
@@ -542,7 +571,7 @@
                             <tbody>
                                 {% for rt in retry_tasks %}
                                 <tr>
-                                    <td><span class="task-name-short">{{ rt.task_name|truncatechars:50 }}</span></td>
+                                    <td><span class="task-name-short">{{ rt.task_name|truncatechars:70 }}</span></td>
                                     <td class="text-end"><span class="text-warning fw-bold">{{ rt.total_retries }}</span></td>
                                     <td class="text-end">{{ rt.count }}</td>
                                 </tr>
@@ -558,7 +587,7 @@
 
     <!-- Recent Failures + Failure Rates -->
     <div class="row g-4 mb-4">
-        <div class="col-lg-6">
+        <div class="col-lg-6 col-xxl-{% if failure_by_task %}6{% else %}12{% endif %}">
             <div class="section-header"><i class="fa-solid fa-circle-xmark" style="color: #ef4444;"></i> Recent Failures</div>
             <div class="card">
                 <div class="card-body p-0">
@@ -568,9 +597,9 @@
                             <tbody>
                                 {% for f in recent_failures %}
                                 <tr>
-                                    <td><span class="task-name-short">{{ f.task_name|truncatechars:40 }}</span></td>
+                                    <td><span class="task-name-short">{{ f.task_name|truncatechars:60 }}</span></td>
                                     <td style="white-space: nowrap; font-size: 0.8rem; color: #64748b;">{{ f.date_done|timesince }} ago</td>
-                                    <td style="font-size: 0.8rem; color: #ef4444; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ f.result|truncatechars:80 }}</td>
+                                    <td><span class="error-text" title="{{ f.result|truncatechars:200 }}">{{ f.result|truncatechars:120 }}</span></td>
                                     <td><a href="{% url 'saladbar:result-detail' f.id %}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.75rem;"><i class="fa-solid fa-eye"></i></a></td>
                                 </tr>
                                 {% empty %}
@@ -593,7 +622,7 @@
                             <tbody>
                                 {% for t in failure_by_task %}
                                 <tr>
-                                    <td><span class="task-name-short">{{ t.task_name|truncatechars:40 }}</span></td>
+                                    <td><span class="task-name-short">{{ t.task_name|truncatechars:60 }}</span></td>
                                     <td class="text-end">{{ t.total }}</td>
                                     <td class="text-end text-danger fw-bold">{{ t.failures }}</td>
                                     <td class="text-end fw-bold">{% widthratio t.failures t.total 100 %}%</td>
