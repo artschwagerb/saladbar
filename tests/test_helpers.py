@@ -6,6 +6,7 @@ from django.utils import timezone
 
 import saladbar.views as views_module
 from saladbar.views import (
+    _expand_crontab,
     _get_error_groups,
     _get_expected_interval,
     _get_redis_client,
@@ -72,6 +73,49 @@ class ParseCronFieldTests(TestCase):
         self.assertEqual(_parse_cron_field("59", 60), [59])
         self.assertEqual(_parse_cron_field("0-23", 24), list(range(24)))
         self.assertEqual(_parse_cron_field("*/15", 60), [0, 15, 30, 45])
+
+
+class ExpandCrontabTests(TestCase):
+    def test_wildcard_hour_and_step_minute(self):
+        ct = MagicMock()
+        ct.hour = "*"
+        ct.minute = "*/5"
+        hours, minutes = _expand_crontab(ct)
+        self.assertEqual(hours, list(range(24)))
+        self.assertEqual(minutes, [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
+
+    def test_specific_hours_and_single_minute(self):
+        ct = MagicMock()
+        ct.hour = "6,12,18"
+        ct.minute = "0"
+        hours, minutes = _expand_crontab(ct)
+        self.assertEqual(hours, [6, 12, 18])
+        self.assertEqual(minutes, [0])
+
+    def test_range_hour_and_range_minute(self):
+        ct = MagicMock()
+        ct.hour = "9-17"
+        ct.minute = "0,30"
+        hours, minutes = _expand_crontab(ct)
+        self.assertEqual(hours, list(range(9, 18)))
+        self.assertEqual(minutes, [0, 30])
+
+    def test_single_values(self):
+        ct = MagicMock()
+        ct.hour = "3"
+        ct.minute = "45"
+        hours, minutes = _expand_crontab(ct)
+        self.assertEqual(hours, [3])
+        self.assertEqual(minutes, [45])
+
+    def test_returns_same_as_direct_parse_cron_field(self):
+        """Verify _expand_crontab is consistent with direct _parse_cron_field calls."""
+        ct = MagicMock()
+        ct.hour = "*/8"
+        ct.minute = "15,45"
+        hours, minutes = _expand_crontab(ct)
+        self.assertEqual(hours, _parse_cron_field("*/8", 24))
+        self.assertEqual(minutes, _parse_cron_field("15,45", 60))
 
 
 class GetExpectedIntervalTests(TestCase):
