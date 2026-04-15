@@ -248,13 +248,13 @@
     <div class="row g-4 mb-4">
         <div class="col-lg-4">
             <div class="card h-100">
-                <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-chart-bar" style="color: #3b82f6;"></i> Task Volume (24h)</div>
+                <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-chart-area" style="color: #3b82f6;"></i> Task Volume (24h)</div>
                 <div class="card-body">
                     {% if has_hourly_data %}
                     <div class="chart-container-sm"><canvas id="hourlyChart"></canvas></div>
                     {% else %}
                     <div class="chart-container-sm d-flex align-items-center justify-content-center">
-                        <div class="text-center text-muted"><i class="fa-solid fa-chart-bar fa-2x mb-2" style="opacity: 0.3;"></i><p class="mb-0" style="font-size: 0.85rem;">No task data in the last 24 hours</p></div>
+                        <div class="text-center text-muted"><i class="fa-solid fa-chart-area fa-2x mb-2" style="opacity: 0.3;"></i><p class="mb-0" style="font-size: 0.85rem;">No task data in the last 24 hours</p></div>
                     </div>
                     {% endif %}
                 </div>
@@ -665,15 +665,15 @@
     };
     {% if has_hourly_data %}
     new Chart(document.getElementById('hourlyChart'), {
-        type: 'bar',
+        type: 'line',
         data: {
             labels: {{ chart_labels|safe }},
             datasets: [
-                { label: 'Success', data: {{ chart_success|safe }}, backgroundColor: '#10b981', borderRadius: 4 },
-                { label: 'Failure', data: {{ chart_failure|safe }}, backgroundColor: '#b91c1c', borderRadius: 4 },
+                { label: 'Success', data: {{ chart_success|safe }}, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3 },
+                { label: 'Failure', data: {{ chart_failure|safe }}, borderColor: '#b91c1c', backgroundColor: 'rgba(185,28,28,0.1)', fill: true, tension: 0.3 },
             ],
         },
-        options: { ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: true }, y: { ...chartOpts.scales.y, stacked: true } } },
+        options: chartOpts,
     });
     {% endif %}
     {% if has_daily_data %}
