@@ -15,4 +15,5 @@ urlpatterns = [
     path("revoke/<str:task_id>/", views.task_revoke, name="task-revoke"),
     path("queue/purge/", views.queue_purge, name="queue-purge"),
     path("api/task-status/<str:task_id>/", views.task_status, name="task-status"),
+    path("metrics/", views.prometheus_metrics, name="metrics"),
 ]

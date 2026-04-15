@@ -472,3 +472,109 @@ class RetryTrackingTaskDetailTests(TestCase):
         TaskResult.objects.filter(status="RETRY").delete()
         response = self.client.get(f"/saladbar/tasks/{self.task.pk}/")
         self.assertEqual(response.context["retry_count"], 0)
+
+
+class PrometheusMetricsTests(TestCase):
+    def setUp(self):
+        self.view_perm, _ = _get_or_create_permissions()
+        self.user = User.objects.create_user(username="viewer", password="testpass")
+        self.user.user_permissions.add(self.view_perm)
+
+        now = timezone.now()
+        TaskResult.objects.create(
+            task_id="s1", task_name="app.task_a", status="SUCCESS",
+            date_done=now - timedelta(hours=1), date_created=now - timedelta(hours=1, minutes=2),
+        )
+        TaskResult.objects.create(
+            task_id="f1", task_name="app.task_a", status="FAILURE",
+            date_done=now - timedelta(hours=2), date_created=now - timedelta(hours=2, minutes=1),
+        )
+
+    def test_metrics_disabled_by_default(self):
+        self.client.login(username="viewer", password="testpass")
+        response = self.client.get("/saladbar/metrics/")
+        self.assertEqual(response.status_code, 404)
+
+    @patch("saladbar.views.get_metrics_enabled", return_value=True)
+    def test_metrics_requires_auth_when_no_token(self, _):
+        response = self.client.get("/saladbar/metrics/")
+        self.assertEqual(response.status_code, 401)
+
+    @patch("saladbar.views.get_metrics_enabled", return_value=True)
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_metrics_accessible_with_login(self, _infra, _enabled):
+        self.client.login(username="viewer", password="testpass")
+        response = self.client.get("/saladbar/metrics/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/plain; version=0.0.4; charset=utf-8")
+
+    @patch("saladbar.views.get_metrics_enabled", return_value=True)
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_metrics_contains_task_counts(self, _infra, _enabled):
+        self.client.login(username="viewer", password="testpass")
+        response = self.client.get("/saladbar/metrics/")
+        body = response.content.decode()
+        self.assertIn("saladbar_tasks_total", body)
+        self.assertIn('status="SUCCESS"', body)
+        self.assertIn('status="FAILURE"', body)
+
+    @patch("saladbar.views.get_metrics_enabled", return_value=True)
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_metrics_contains_queue_depth(self, _infra, _enabled):
+        self.client.login(username="viewer", password="testpass")
+        response = self.client.get("/saladbar/metrics/")
+        body = response.content.decode()
+        self.assertIn("saladbar_queue_depth", body)
+
+    @patch("saladbar.views.get_metrics_enabled", return_value=True)
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_metrics_contains_worker_count(self, _infra, _enabled):
+        self.client.login(username="viewer", password="testpass")
+        response = self.client.get("/saladbar/metrics/")
+        body = response.content.decode()
+        self.assertIn("saladbar_workers_active 0", body)
+
+    @patch("saladbar.views.get_metrics_enabled", return_value=True)
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": True, "queue_lengths": {"celery": 5}, "connected_clients": 3, "used_memory_human": "1.5M"}))
+    def test_metrics_contains_redis_info(self, _infra, _enabled):
+        self.client.login(username="viewer", password="testpass")
+        response = self.client.get("/saladbar/metrics/")
+        body = response.content.decode()
+        self.assertIn("saladbar_redis_connected 1", body)
+        self.assertIn("saladbar_redis_connected_clients 3", body)
+
+    @patch("saladbar.views.get_metrics_enabled", return_value=True)
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_metrics_contains_avg_runtime(self, _infra, _enabled):
+        self.client.login(username="viewer", password="testpass")
+        response = self.client.get("/saladbar/metrics/")
+        body = response.content.decode()
+        self.assertIn("saladbar_task_avg_runtime_seconds", body)
+        self.assertIn('task="app.task_a"', body)
+
+    @patch("saladbar.views.get_metrics_enabled", return_value=True)
+    @patch("saladbar.views.get_metrics_token", return_value="secret-token")
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_metrics_token_auth_valid(self, _infra, _token, _enabled):
+        response = self.client.get("/saladbar/metrics/", HTTP_AUTHORIZATION="Bearer secret-token")
+        self.assertEqual(response.status_code, 200)
+
+    @patch("saladbar.views.get_metrics_enabled", return_value=True)
+    @patch("saladbar.views.get_metrics_token", return_value="secret-token")
+    def test_metrics_token_auth_invalid(self, _token, _enabled):
+        response = self.client.get("/saladbar/metrics/", HTTP_AUTHORIZATION="Bearer wrong-token")
+        self.assertEqual(response.status_code, 401)
+
+    @patch("saladbar.views.get_metrics_enabled", return_value=True)
+    @patch("saladbar.views.get_metrics_token", return_value="secret-token")
+    def test_metrics_token_auth_missing(self, _token, _enabled):
+        response = self.client.get("/saladbar/metrics/")
+        self.assertEqual(response.status_code, 401)
+
+    @patch("saladbar.views.get_metrics_enabled", return_value=True)
+    @patch("saladbar.views._get_infra_cached", return_value=([], {"connected": False}))
+    def test_metrics_forbidden_without_permission(self, _infra, _enabled):
+        unprivileged = User.objects.create_user(username="noperm", password="testpass")
+        self.client.login(username="noperm", password="testpass")
+        response = self.client.get("/saladbar/metrics/")
+        self.assertEqual(response.status_code, 403)

@@ -14,6 +14,8 @@ Users can override these in their Django settings module:
     SALADBAR_TASK_HISTORY_LIMIT = 50
     SALADBAR_MAX_RESULT_RECORDS = 5000
     SALADBAR_API_RESULT_TRUNCATION = 200
+    SALADBAR_METRICS_ENABLED = True
+    SALADBAR_METRICS_TOKEN = "secret-bearer-token"
 """
 
 from django.conf import settings
@@ -55,6 +57,13 @@ DEFAULT_MAX_RESULT_RECORDS = 5000
 
 # Max characters for result truncation in the task-status API.
 DEFAULT_API_RESULT_TRUNCATION = 200
+
+# Enable the Prometheus /metrics endpoint. Opt-in, default False.
+DEFAULT_METRICS_ENABLED = False
+
+# Optional bearer token for authenticating Prometheus scraper requests.
+# When None, the endpoint requires Django login + can_view_saladbar permission.
+DEFAULT_METRICS_TOKEN = None
 
 
 def get_base_template():
@@ -116,3 +125,11 @@ def get_max_result_records():
 
 def get_api_result_truncation():
     return getattr(settings, "SALADBAR_API_RESULT_TRUNCATION", DEFAULT_API_RESULT_TRUNCATION)
+
+
+def get_metrics_enabled():
+    return getattr(settings, "SALADBAR_METRICS_ENABLED", DEFAULT_METRICS_ENABLED)
+
+
+def get_metrics_token():
+    return getattr(settings, "SALADBAR_METRICS_TOKEN", DEFAULT_METRICS_TOKEN)
