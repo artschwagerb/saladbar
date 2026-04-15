@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=68.0", "setuptools-scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-saladbar"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A Celery task monitoring dashboard for Django"
 readme = "README.md"
 license = "MIT"
@@ -53,3 +53,9 @@ Issues = "https://github.com/bartschwager/django-saladbar/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools_scm]
+# Derive version from git tags (e.g., v0.2.0 -> 0.2.0)
+# Dev builds between tags get versions like 0.2.0.dev3+gabcdef1
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"

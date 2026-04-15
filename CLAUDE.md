@@ -134,7 +134,7 @@ Tests mock Celery inspector and Redis calls — no running services needed. Test
 - `pyproject.toml` with setuptools build backend, src layout
 - `MANIFEST.in` includes templates and static files
 - `Dockerfile` builds, validates, tests in one image
-- Versioned at `0.1.0` in `pyproject.toml`
+- **Version derived from git tags** via `setuptools-scm`. Tag `v0.2.0` → version `0.2.0`. No hardcoded version in `pyproject.toml`. Docker builds use `SETUPTOOLS_SCM_PRETEND_VERSION` build arg since `.git/` isn't copied into the image.
 
 ## Gotchas
 
