@@ -541,25 +541,24 @@
         </div>
     </div>
 
-    <!-- Recent Failures + Failure Rates -->
+    <!-- Errors by Type + Failure Rates -->
     <div class="row g-4 mb-4">
-        <div class="col-lg-6 col-xxl-{% if failure_by_task %}6{% else %}12{% endif %}">
-            <div class="section-header"><i class="fa-solid fa-circle-xmark" style="color: #94a3b8;"></i> Recent Failures</div>
-            <div class="card">
+        {% if error_groups %}
+        <div class="col-lg-{% if failure_by_task %}6{% else %}12{% endif %}">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-bug" style="color: #94a3b8;"></i> Errors by Type (24h)</div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0 table-fixed">
-                            <thead><tr><th class="col-task">Task</th><th class="col-when">When</th><th class="col-error">Error</th><th class="col-action"></th></tr></thead>
+                        <table class="table table-hover align-middle mb-0">
+                            <thead><tr><th>Exception</th><th class="text-end">Count</th><th class="text-end">Tasks Affected</th><th></th></tr></thead>
                             <tbody>
-                                {% for f in recent_failures %}
+                                {% for eg in error_groups %}
                                 <tr>
-                                    <td><span class="task-name-short">{{ f.task_name|truncatechars:60 }}</span></td>
-                                    <td style="white-space: nowrap; font-size: 0.8rem; color: #64748b;">{{ f.date_done|timesince }} ago</td>
-                                    <td><span class="error-text" title="{{ f.result|truncatechars:300 }}">{{ f.result|truncatechars:200 }}</span></td>
-                                    <td><a href="{% url 'saladbar:result-detail' f.id %}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.75rem;"><i class="fa-solid fa-eye"></i></a></td>
+                                    <td><span style="font-weight: 600; font-size: 0.82rem; color: #1e293b; font-family: monospace; word-break: break-all;">{{ eg.exception }}</span></td>
+                                    <td class="text-end"><span class="fw-bold">{{ eg.count }}</span></td>
+                                    <td class="text-end">{{ eg.affected_tasks }}</td>
+                                    <td>{% if eg.latest_id %}<a href="{% url 'saladbar:result-detail' eg.latest_id %}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.75rem;"><i class="fa-solid fa-eye"></i></a>{% endif %}</td>
                                 </tr>
-                                {% empty %}
-                                <tr><td colspan="4" class="text-center text-muted py-4">No recent failures.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -567,10 +566,11 @@
                 </div>
             </div>
         </div>
+        {% endif %}
         {% if failure_by_task %}
-        <div class="col-lg-6">
-            <div class="section-header"><i class="fa-solid fa-chart-pie" style="color: #f59e0b;"></i> Failure Rates by Task (7d)</div>
-            <div class="card">
+        <div class="col-lg-{% if error_groups %}6{% else %}12{% endif %}">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-chart-pie" style="color: #f59e0b;"></i> Failure Rates by Task (7d)</div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
@@ -580,7 +580,7 @@
                                 <tr>
                                     <td><span class="task-name-short">{{ t.task_name|truncatechars:60 }}</span></td>
                                     <td class="text-end">{{ t.total }}</td>
-                                    <td class="text-end text-danger fw-bold">{{ t.failures }}</td>
+                                    <td class="text-end fw-bold">{{ t.failures }}</td>
                                     <td class="text-end fw-bold">{% widthratio t.failures t.total 100 %}%</td>
                                     <td>
                                         <div style="height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden;">
@@ -598,57 +598,56 @@
         {% endif %}
     </div>
 
-    <!-- Error Grouping + Retries -->
-    <div class="row g-4 mb-4">
-        {% if error_groups %}
-        <div class="col-lg-{% if retry_tasks %}6{% else %}12{% endif %}">
-            <div class="card h-100">
-                <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-bug" style="color: #94a3b8;"></i> Errors by Type (24h)</div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead><tr><th>Exception</th><th class="text-end">Count</th><th class="text-end">Tasks Affected</th><th></th></tr></thead>
-                            <tbody>
-                                {% for eg in error_groups %}
-                                <tr>
-                                    <td><span class="error-mono">{{ eg.exception }}</span></td>
-                                    <td class="text-end"><span class="text-danger fw-bold">{{ eg.count }}</span></td>
-                                    <td class="text-end">{{ eg.affected_tasks }}</td>
-                                    <td>{% if eg.latest_id %}<a href="{% url 'saladbar:result-detail' eg.latest_id %}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.75rem;"><i class="fa-solid fa-eye"></i></a>{% endif %}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+    <!-- Recent Failures (full width) -->
+    <div class="mb-4">
+        <div class="section-header"><i class="fa-solid fa-circle-xmark" style="color: #94a3b8;"></i> Recent Failures</div>
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 table-fixed">
+                        <thead><tr><th class="col-task">Task</th><th class="col-when">When</th><th class="col-error">Error</th><th class="col-action"></th></tr></thead>
+                        <tbody>
+                            {% for f in recent_failures %}
+                            <tr>
+                                <td><span class="task-name-short">{{ f.task_name|truncatechars:60 }}</span></td>
+                                <td style="white-space: nowrap; font-size: 0.8rem; color: #64748b;">{{ f.date_done|timesince }} ago</td>
+                                <td><span class="error-text" title="{{ f.result|truncatechars:300 }}">{{ f.result|truncatechars:200 }}</span></td>
+                                <td><a href="{% url 'saladbar:result-detail' f.id %}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.75rem;"><i class="fa-solid fa-eye"></i></a></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-4">No recent failures.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
-        {% endif %}
-
-        {% if retry_tasks %}
-        <div class="col-lg-{% if error_groups %}6{% else %}12{% endif %}">
-            <div class="card h-100">
-                <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-arrows-rotate" style="color: #f59e0b;"></i> Tasks with Retries (24h)</div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead><tr><th>Task</th><th class="text-end">Total Retries</th><th class="text-end">Executions</th></tr></thead>
-                            <tbody>
-                                {% for rt in retry_tasks %}
-                                <tr>
-                                    <td><span class="task-name-short">{{ rt.task_name|truncatechars:70 }}</span></td>
-                                    <td class="text-end"><span class="text-warning fw-bold">{{ rt.total_retries }}</span></td>
-                                    <td class="text-end">{{ rt.count }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
+
+    <!-- Retries -->
+    {% if retry_tasks %}
+    <div class="mb-4">
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-arrows-rotate" style="color: #f59e0b;"></i> Tasks with Retries (24h)</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead><tr><th>Task</th><th class="text-end">Total Retries</th><th class="text-end">Executions</th></tr></thead>
+                        <tbody>
+                            {% for rt in retry_tasks %}
+                            <tr>
+                                <td><span class="task-name-short">{{ rt.task_name|truncatechars:70 }}</span></td>
+                                <td class="text-end"><span class="text-warning fw-bold">{{ rt.total_retries }}</span></td>
+                                <td class="text-end">{{ rt.count }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock content %}
 
