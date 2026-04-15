@@ -30,6 +30,8 @@ from .conf import (
     get_long_running_multiplier,
     get_max_result_records,
     get_max_runtime_records,
+    get_metrics_enabled,
+    get_metrics_token,
     get_on_schedule_multiplier,
     get_queue_names,
     get_stale_multiplier,
@@ -972,3 +974,120 @@ def task_status(request, task_id):
         "status": result.status,
         "result": str(result.result)[:get_api_result_truncation()] if result.result else None,
     })
+
+
+def prometheus_metrics(request):
+    """Prometheus text exposition format endpoint.
+
+    Authentication: If SALADBAR_METRICS_TOKEN is set, the request must include
+    an ``Authorization: Bearer <token>`` header. Otherwise, standard Django
+    login + ``can_view_saladbar`` permission is required.
+
+    Returns 404 when SALADBAR_METRICS_ENABLED is False (default).
+    """
+    from django.http import Http404, HttpResponse
+
+    if not get_metrics_enabled():
+        raise Http404
+
+    # Auth: token-based or Django session
+    token = get_metrics_token()
+    if token:
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        if auth_header != f"Bearer {token}":
+            return HttpResponse("Unauthorized", status=401)
+    else:
+        if not request.user.is_authenticated:
+            return HttpResponse("Unauthorized", status=401)
+        if not request.user.has_perm("saladbar.can_view_saladbar"):
+            return HttpResponse("Forbidden", status=403)
+
+    now = timezone.now()
+    last_24h = now - timedelta(hours=24)
+    lines = []
+
+    # -- Task counts by status (24h) --
+    status_counts = (
+        TaskResult.objects.filter(date_done__gte=last_24h)
+        .values("status")
+        .annotate(count=Count("id"))
+    )
+    lines.append("# HELP saladbar_tasks_total Total tasks in the last 24h by status")
+    lines.append("# TYPE saladbar_tasks_total gauge")
+    for row in status_counts:
+        lines.append(f'saladbar_tasks_total{{status="{row["status"]}"}} {row["count"]}')
+
+    # -- Queue depth --
+    workers, redis_info = _get_infra_cached()
+    queue_lengths = redis_info.get("queue_lengths", {})
+    lines.append("# HELP saladbar_queue_depth Current number of messages in queue")
+    lines.append("# TYPE saladbar_queue_depth gauge")
+    for queue_name in get_queue_names():
+        depth = queue_lengths.get(queue_name, 0)
+        lines.append(f'saladbar_queue_depth{{queue="{queue_name}"}} {depth}')
+
+    # -- Workers --
+    lines.append("# HELP saladbar_workers_active Number of active workers")
+    lines.append("# TYPE saladbar_workers_active gauge")
+    lines.append(f"saladbar_workers_active {len(workers)}")
+
+    lines.append("# HELP saladbar_worker_pool_utilization Worker pool utilization percentage")
+    lines.append("# TYPE saladbar_worker_pool_utilization gauge")
+    for w in workers:
+        name = w["name"].replace('"', '\\"')
+        lines.append(f'saladbar_worker_pool_utilization{{worker="{name}"}} {w["utilization"]}')
+
+    # -- Periodic tasks: stale count --
+    periodic_tasks = list(
+        PeriodicTask.objects.select_related("interval", "crontab").filter(enabled=True)
+    )
+    stale_tasks = _get_stale_tasks(periodic_tasks, now)
+    lines.append("# HELP saladbar_periodic_tasks_stale Number of stale periodic tasks")
+    lines.append("# TYPE saladbar_periodic_tasks_stale gauge")
+    lines.append(f"saladbar_periodic_tasks_stale {len(stale_tasks)}")
+
+    # -- Average runtime by task (24h, top 20) --
+    task_runtimes = {}
+    for created, done, name in (
+        TaskResult.objects.filter(
+            date_done__gte=last_24h,
+            status="SUCCESS",
+            date_created__isnull=False,
+            date_done__isnull=False,
+        )
+        .order_by("-date_done")
+        .values_list("date_created", "date_done", "task_name")[:get_max_runtime_records()]
+    ):
+        if done and created:
+            task_runtimes.setdefault(name, []).append((done - created).total_seconds())
+
+    lines.append("# HELP saladbar_task_avg_runtime_seconds Average task runtime in seconds (24h)")
+    lines.append("# TYPE saladbar_task_avg_runtime_seconds gauge")
+    sorted_tasks = sorted(task_runtimes.items(), key=lambda x: -len(x[1]))[:20]
+    for name, times in sorted_tasks:
+        avg = round(sum(times) / len(times), 3)
+        safe_name = name.replace('"', '\\"')
+        lines.append(f'saladbar_task_avg_runtime_seconds{{task="{safe_name}"}} {avg}')
+
+    # -- Redis broker health --
+    lines.append("# HELP saladbar_redis_connected Whether the Redis broker is reachable")
+    lines.append("# TYPE saladbar_redis_connected gauge")
+    lines.append(f'saladbar_redis_connected {1 if redis_info.get("connected") else 0}')
+
+    if redis_info.get("connected"):
+        lines.append("# HELP saladbar_redis_memory_bytes Redis used memory in bytes")
+        lines.append("# TYPE saladbar_redis_memory_bytes gauge")
+        # Parse human-readable memory back; use raw used_memory if available from info
+        # Re-fetch from the cached redis_info — the raw used_memory isn't stored,
+        # but we can get it by parsing the human string or re-querying.
+        # For simplicity, expose the human-readable value as an info metric.
+        used_mem = redis_info.get("used_memory_human", "0")
+        lines.append(f'saladbar_redis_used_memory_human{{value="{used_mem}"}} 1')
+
+        lines.append("# HELP saladbar_redis_connected_clients Number of connected Redis clients")
+        lines.append("# TYPE saladbar_redis_connected_clients gauge")
+        lines.append(f'saladbar_redis_connected_clients {redis_info.get("connected_clients", 0)}')
+
+    lines.append("")  # Trailing newline
+    body = "\n".join(lines)
+    return HttpResponse(body, content_type="text/plain; version=0.0.4; charset=utf-8")
