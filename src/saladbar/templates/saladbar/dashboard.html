@@ -56,9 +56,17 @@
     .health-card { border-radius: 12px; border: 1px solid #e2e8f0; padding: 0.75rem 1rem; background: #fff; text-align: center; }
     .health-card .health-value { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
     .health-card .health-label { font-size: 0.75rem; color: #64748b; font-weight: 500; }
-    /* Error text: dark enough to read, not pure red */
-    .error-text { font-size: 0.8rem; color: #991b1b; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Override Bootstrap text-danger to a darker, more readable red */
+    .text-danger, .table .text-danger { color: #991b1b !important; }
+    /* Error text in tables: clip to cell width */
+    .error-text { font-size: 0.8rem; color: #64748b; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .error-mono { font-weight: 600; font-size: 0.82rem; color: #7f1d1d; font-family: monospace; word-break: break-all; }
+    /* Force the error column to respect table width */
+    .table-fixed { table-layout: fixed; }
+    .table-fixed .col-task { width: 30%; }
+    .table-fixed .col-when { width: 15%; }
+    .table-fixed .col-error { width: 45%; }
+    .table-fixed .col-action { width: 10%; }
     /* Wide-screen: 3-up table rows on xl, 4-up on xxl */
     @media (min-width: 1400px) {
         .col-xxl-4 { flex: 0 0 33.3333%; max-width: 33.3333%; }
@@ -129,13 +137,13 @@
             </div>
         </div>
         <div class="col">
-            <div class="stat-card" style="border-left: 4px solid #ef4444;">
+            <div class="stat-card" style="border-left: 4px solid #b91c1c;">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <div class="stat-label">Failures (24h)</div>
-                        <div class="stat-value" style="color: #ef4444;">{{ failure_24h }}</div>
+                        <div class="stat-value" style="color: {% if failure_24h > 0 %}#991b1b{% else %}#94a3b8{% endif %};">{{ failure_24h }}</div>
                     </div>
-                    <i class="fa-solid fa-triangle-exclamation stat-icon" style="color: #ef4444;"></i>
+                    <i class="fa-solid fa-triangle-exclamation stat-icon" style="color: #b91c1c;"></i>
                 </div>
             </div>
         </div>
@@ -197,8 +205,8 @@
             </div>
         </div>
         <div class="col-md-4">
-            <div class="health-card" style="border-left: 4px solid #ef4444;">
-                <div class="health-value" style="color: {% if periodic_missed > 0 %}#ef4444{% else %}#94a3b8{% endif %};">{{ periodic_missed }}</div>
+            <div class="health-card" style="border-left: 4px solid #b91c1c;">
+                <div class="health-value" style="color: {% if periodic_missed > 0 %}#991b1b{% else %}#94a3b8{% endif %};">{{ periodic_missed }}</div>
                 <div class="health-label"><i class="fa-solid fa-clock me-1"></i>Missed Window</div>
             </div>
         </div>
@@ -320,7 +328,7 @@
     {% if redis_info.connected %}
     <div class="d-flex align-items-center flex-wrap gap-3 mb-4 px-3 py-2" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 0.8rem; color: #64748b;">
         <span class="d-flex align-items-center gap-1" style="font-weight: 700; color: #1e293b;">
-            <i class="fa-solid fa-database" style="color: #ef4444;"></i> Redis
+            <i class="fa-solid fa-database" style="color: #dc2626;"></i> Redis
             <span class="badge bg-success ms-1" style="font-size: 0.65rem;">v{{ redis_info.version }}</span>
         </span>
         <span data-bs-toggle="tooltip" title="Current memory usage{% if redis_info.memory_pct %} vs configured max{% endif %}"><i class="fa-solid fa-memory me-1"></i>{{ redis_info.used_memory_human }}{% if redis_info.memory_pct %} / {{ redis_info.maxmemory_human }} ({{ redis_info.memory_pct }}%){% endif %}</span>
@@ -510,7 +518,7 @@
         </div>
         <div class="col-lg-6">
             <div class="card h-100">
-                <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-stopwatch" style="color: #ef4444;"></i> Slowest Tasks (24h Avg)</div>
+                <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-stopwatch" style="color: #f59e0b;"></i> Slowest Tasks (24h Avg)</div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
@@ -538,7 +546,7 @@
         {% if error_groups %}
         <div class="col-lg-{% if retry_tasks %}6{% else %}12{% endif %}">
             <div class="card h-100">
-                <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-bug" style="color: #ef4444;"></i> Errors by Type (24h)</div>
+                <div class="card-header d-flex align-items-center gap-2"><i class="fa-solid fa-bug" style="color: #94a3b8;"></i> Errors by Type (24h)</div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
@@ -588,18 +596,18 @@
     <!-- Recent Failures + Failure Rates -->
     <div class="row g-4 mb-4">
         <div class="col-lg-6 col-xxl-{% if failure_by_task %}6{% else %}12{% endif %}">
-            <div class="section-header"><i class="fa-solid fa-circle-xmark" style="color: #ef4444;"></i> Recent Failures</div>
+            <div class="section-header"><i class="fa-solid fa-circle-xmark" style="color: #94a3b8;"></i> Recent Failures</div>
             <div class="card">
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead><tr><th>Task</th><th>When</th><th>Error</th><th></th></tr></thead>
+                        <table class="table table-hover align-middle mb-0 table-fixed">
+                            <thead><tr><th class="col-task">Task</th><th class="col-when">When</th><th class="col-error">Error</th><th class="col-action"></th></tr></thead>
                             <tbody>
                                 {% for f in recent_failures %}
                                 <tr>
                                     <td><span class="task-name-short">{{ f.task_name|truncatechars:60 }}</span></td>
                                     <td style="white-space: nowrap; font-size: 0.8rem; color: #64748b;">{{ f.date_done|timesince }} ago</td>
-                                    <td><span class="error-text" title="{{ f.result|truncatechars:200 }}">{{ f.result|truncatechars:120 }}</span></td>
+                                    <td><span class="error-text" title="{{ f.result|truncatechars:300 }}">{{ f.result|truncatechars:200 }}</span></td>
                                     <td><a href="{% url 'saladbar:result-detail' f.id %}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.75rem;"><i class="fa-solid fa-eye"></i></a></td>
                                 </tr>
                                 {% empty %}
@@ -628,7 +636,7 @@
                                     <td class="text-end fw-bold">{% widthratio t.failures t.total 100 %}%</td>
                                     <td>
                                         <div style="height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden;">
-                                            <div style="width: {% widthratio t.failures t.total 100 %}%; height: 100%; background: #ef4444; border-radius: 3px;"></div>
+                                            <div style="width: {% widthratio t.failures t.total 100 %}%; height: 100%; background: #b91c1c; border-radius: 3px;"></div>
                                         </div>
                                     </td>
                                 </tr>
@@ -650,7 +658,7 @@
     const chartOpts = {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: { size: 12 } } } },
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: { size: 12 }, usePointStyle: true, pointStyle: 'rectRounded' } } },
         scales: {
             x: { grid: { display: false }, ticks: { font: { size: 10 } } },
             y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } },
@@ -663,7 +671,7 @@
             labels: {{ chart_labels|safe }},
             datasets: [
                 { label: 'Success', data: {{ chart_success|safe }}, backgroundColor: '#10b981', borderRadius: 4 },
-                { label: 'Failure', data: {{ chart_failure|safe }}, backgroundColor: '#ef4444', borderRadius: 4 },
+                { label: 'Failure', data: {{ chart_failure|safe }}, backgroundColor: '#b91c1c', borderRadius: 4 },
             ],
         },
         options: { ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: true }, y: { ...chartOpts.scales.y, stacked: true } } },
@@ -676,7 +684,7 @@
             labels: {{ daily_labels|safe }},
             datasets: [
                 { label: 'Success', data: {{ daily_success|safe }}, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3 },
-                { label: 'Failure', data: {{ daily_failure|safe }}, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', fill: true, tension: 0.3 },
+                { label: 'Failure', data: {{ daily_failure|safe }}, borderColor: '#b91c1c', backgroundColor: 'rgba(185,28,28,0.1)', fill: true, tension: 0.3 },
             ],
         },
         options: chartOpts,
