@@ -194,6 +194,20 @@ def _get_in_flight_tasks(workers):
     return active, reserved
 
 
+def _expand_crontab(ct):
+    """Expand a crontab's hour and minute fields into sorted integer lists.
+
+    Returns:
+        tuple: (hours: list[int], minutes: list[int])
+
+    Raises:
+        ValueError: If the cron fields cannot be parsed.
+    """
+    hours = _parse_cron_field(ct.hour, 24)
+    minutes = _parse_cron_field(ct.minute, 60)
+    return hours, minutes
+
+
 def _get_expected_interval(task):
     """Return the expected run interval in seconds for a periodic task, or None.
 
@@ -207,10 +221,8 @@ def _get_expected_interval(task):
         multipliers = {"seconds": 1, "minutes": 60, "hours": 3600, "days": 86400}
         return every * multipliers.get(period, 60)
     elif task.crontab:
-        ct = task.crontab
         try:
-            hours = _parse_cron_field(ct.hour, 24)
-            minutes = _parse_cron_field(ct.minute, 60)
+            hours, minutes = _expand_crontab(task.crontab)
         except Exception:
             return 3600  # Fallback
 
@@ -324,8 +336,7 @@ def _parse_schedule_timeline(periodic_tasks):
             continue
         ct = task.crontab
         try:
-            hours = _parse_cron_field(ct.hour, 24)
-            minutes = _parse_cron_field(ct.minute, 60)
+            hours, minutes = _expand_crontab(ct)
         except Exception:
             continue
 
