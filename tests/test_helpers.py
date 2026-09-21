@@ -35,6 +35,15 @@ class ParseCronFieldTests(TestCase):
     def test_step_with_base(self):
         self.assertEqual(_parse_cron_field("10/15", 60), [10, 25, 40, 55])
 
+    def test_range_with_step(self):
+        self.assertEqual(
+            _parse_cron_field("3-59/5", 60),
+            [3, 8, 13, 18, 23, 28, 33, 38, 43, 48, 53, 58],
+        )
+
+    def test_range_with_step_stops_at_range_end(self):
+        self.assertEqual(_parse_cron_field("3-17/5", 60), [3, 8, 13])
+
     def test_zero(self):
         self.assertEqual(_parse_cron_field("0", 60), [0])
 
@@ -265,6 +274,23 @@ class ParseScheduleTimelineTests(TestCase):
         task.pk = 2
 
         timeline = _parse_schedule_timeline([task])
+        self.assertEqual(len(timeline), 1)
+        self.assertTrue(timeline[0]["collapsed"])
+        self.assertEqual(timeline[0]["freq_label"], "every 5 min")
+
+    def test_range_step_crontab_collapsed(self):
+        task = MagicMock()
+        task.enabled = True
+        task.crontab = MagicMock()
+        task.crontab.minute = "3-59/5"
+        task.crontab.hour = "0"
+        task.name = "offset-frequent-task"
+        task.task = "app.tasks.offset_frequent"
+        task.pk = 3
+
+        with self.assertNoLogs("saladbar.views", level="WARNING"):
+            timeline = _parse_schedule_timeline([task])
+
         self.assertEqual(len(timeline), 1)
         self.assertTrue(timeline[0]["collapsed"])
         self.assertEqual(timeline[0]["freq_label"], "every 5 min")

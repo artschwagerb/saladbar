@@ -379,7 +379,7 @@ def _parse_schedule_timeline(periodic_tasks):
 
 
 def _parse_cron_field(field, max_val):
-    """Parse a crontab field like '0', '*/5', '1,15', '1-5' into a list of ints.
+    """Parse a crontab field like '0', '*/5', '1,15', or '3-59/5'.
 
     All returned values are guaranteed to be in the range [0, max_val).
     Out-of-bounds values from malformed crontab entries are silently dropped.
@@ -397,8 +397,13 @@ def _parse_cron_field(field, max_val):
                 step = int(step)
                 if step <= 0:
                     continue
-                start = 0 if base == "*" else int(base)
-                values.update(range(start, max_val, step))
+                if base == "*":
+                    start, end = 0, max_val - 1
+                elif "-" in base:
+                    start, end = (int(value) for value in base.split("-", 1))
+                else:
+                    start, end = int(base), max_val - 1
+                values.update(range(start, end + 1, step))
             elif "-" in part:
                 start, end = part.split("-", 1)
                 values.update(range(int(start), int(end) + 1))
